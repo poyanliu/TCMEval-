@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中医药政策文献智能评价系统</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #2c7744; --primary-dark: #1a4d2c; --bg: #f5f7fa;
+    --card: #fff; --text: #1a1a1a; --muted: #666; --border: #e0e0e0;
+    --good: #1b5e20; --mid: #fb8c00; --bad: #e53935;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* 顶部导航 */
+  .navbar { background: linear-gradient(135deg, #2c7744 0%, #1a4d2c 100%); color: #fff; padding: 0 24px; display: flex; align-items: center; height: 56px; box-shadow: 0 2px 8px rgba(26,77,44,.25); }
+  .navbar .brand { font-weight: 700; font-size: 17px; letter-spacing: .5px; }
+  .navbar .nav-links { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .navbar a { color: #fff; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: background .2s; }
+  .navbar a:hover { background: rgba(255,255,255,.15); }
+  .navbar a.active { background: rgba(255,255,255,.22); font-weight: 600; }
+  .navbar .user-chip { font-size: 13px; opacity: .9; margin-right: 8px; }
+
+  .container { max-width: 1180px; margin: 0 auto; padding: 24px 20px 60px; }
+
+  /* 登录 */
+  .login-wrap { max-width: 420px; margin: 8vh auto 0; background: var(--card); border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.1); padding: 40px 36px; }
+  .login-wrap h1 { font-size: 22px; color: var(--primary-dark); margin-bottom: 6px; text-align: center; }
+  .login-wrap .sub { color: var(--muted); font-size: 13px; text-align: center; margin-bottom: 28px; }
+  .login-wrap label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  .login-wrap input { width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; }
+  .login-wrap input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(44,119,68,.12); }
+  .login-wrap .btn { width: 100%; margin-top: 24px; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .login-wrap .btn:hover { background: var(--primary-dark); }
+  .login-wrap .err { color: var(--bad); font-size: 13px; text-align: center; margin-top: 12px; min-height: 18px; }
+  .login-wrap .hint { margin-top: 18px; font-size: 12px; color: #999; text-align: center; }
+
+  /* 上传区 */
+  .upload-zone { background: var(--card); border: 2px dashed #bbb; border-radius: 14px; padding: 44px 24px; text-align: center; cursor: pointer; transition: all .25s; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--primary); background: #f0f7f2; }
+  .upload-zone .icon { font-size: 48px; }
+  .upload-zone h3 { margin: 12px 0 6px; font-size: 17px; }
+  .upload-zone p { color: var(--muted); font-size: 13px; }
+  .upload-zone input { display: none; }
+
+  .file-list { margin: 16px 0; }
+  .file-item { background: #f0f4f1; border-radius: 8px; padding: 10px 14px; margin: 6px 0; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+  .file-item .rm { color: var(--bad); cursor: pointer; font-weight: 700; }
+  .action-row { display: flex; gap: 12px; margin-top: 16px; }
+  .btn { padding: 11px 24px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background .2s, opacity .2s; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-ghost { background: #eef2ee; color: var(--primary-dark); }
+  .btn-ghost:hover { background: #e0e8e0; }
+
+  /* 加载 */
+  .spinner-box { text-align: center; padding: 60px 20px; background: var(--card); border-radius: 12px; }
+  .spinner { display: inline-flex; align-items: center; gap: 10px; color: var(--primary); font-size: 16px; font-weight: 500; }
+  .spinner .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); animation: bounce 1.2s infinite ease-in-out both; }
+  .spinner .dot:nth-child(1) { animation-delay: -.32s; } .spinner .dot:nth-child(2) { animation-delay: -.16s; }
+  @keyframes bounce { 0%,80%,100% { transform: scale(0); } 40% { transform: scale(1); } }
+  .spinner-box .tip { color: var(--muted); font-size: 13px; margin-top: 16px; }
+
+  .error-msg { background: #fdecea; color: var(--bad); padding: 12px 16px; border-radius: 8px; font-size: 14px; margin-top: 12px; }
+
+  /* 结果卡片 */
+  .card { background: var(--card); border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.06); padding: 24px; margin-bottom: 20px; }
+  .score-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+  .gauge-box { width: 220px; height: 220px; position: relative; flex-shrink: 0; }
+  .gauge-box .gauge-num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .gauge-box .gauge-num b { font-size: 42px; color: var(--primary-dark); }
+  .gauge-box .gauge-num span { font-size: 13px; color: var(--muted); }
+  .score-meta { flex: 1; min-width: 260px; }
+  .score-meta h2 { font-size: 20px; margin-bottom: 10px; color: var(--primary-dark); }
+  .meta-line { font-size: 14px; color: var(--muted); margin: 6px 0; }
+  .excluded-info { background: #fff8e1; border-left: 4px solid #f9a825; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .chart-box { position: relative; height: 360px; }
+  @media (max-width: 820px) { .charts-row { grid-template-columns: 1fr; } }
+
+  .bonus-box { background: #f8f9fa; border-left: 5px solid var(--primary); padding: 14px 18px; border-radius: 6px; margin: 16px 0; }
+
+  .primary-card { background: #f0f4f1; border-left: 6px solid var(--primary-dark); padding: 16px 18px; margin: 14px 0; border-radius: 8px; }
+  .primary-card .p-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .primary-card .p-name { font-weight: 700; font-size: 16px; color: var(--primary-dark); }
+  .primary-card .p-score { font-size: 18px; font-weight: 700; }
+  .sec-card { background: #fff; border-left: 4px solid #c8e6c9; padding: 12px 16px; margin: 8px 0; border-radius: 6px; }
+  .sec-card .s-head { display: flex; justify-content: space-between; align-items: center; }
+  .sec-card .s-name { font-weight: 600; font-size: 14px; }
+  .sec-card .s-score { font-weight: 700; font-size: 14px; }
+  .sec-card .evidence { font-size: 12.5px; color: #555; margin-top: 6px; background: #fffef5; border: 1px solid #eee8d5; padding: 6px 10px; border-radius: 4px; }
+  .sec-card .comment { font-size: 12.5px; color: #777; margin-top: 4px; }
+
+  .overall-comment { font-size: 14px; line-height: 1.7; color: #333; }
+
+  /* 历史表格 */
+  .history-table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.06); }
+  .history-table th { background: #f0f4f1; padding: 12px 14px; text-align: left; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .history-table td { padding: 10px 14px; font-size: 14px; border-bottom: 1px solid var(--border); }
+  .history-table tr:hover td { background: #fafdfb; }
+  .history-table a { color: var(--primary); text-decoration: none; margin-right: 10px; font-size: 13px; cursor: pointer; }
+  .history-table a:hover { text-decoration: underline; }
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 20px; font-weight: 700; font-size: 13px; }
+  .pill-high { background: #e8f5e9; color: var(--good); } .pill-mid { background: #fff8e1; color: #e65100; } .pill-low { background: #fdecea; color: var(--bad); }
+
+  /* 展馆 */
+  .gallery-filters { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .gallery-filters select, .gallery-filters input { padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+  .exhibit-card { background: #fafaf5; border-left: 6px solid #b8860b; padding: 18px 20px; margin: 14px 0; border-radius: 8px; }
+  .exhibit-card .e-head { display: flex; justify-content: space-between; align-items: center; }
+  .exhibit-card .e-name { font-size: 16px; font-weight: 700; }
+  .exhibit-card .e-score { font-size: 28px; font-weight: 700; color: #b8860b; }
+  .star-badge { display: inline-block; background: #b8860b; color: #fff; padding: 2px 10px; border-radius: 20px; font-size: 12px; margin-left: 8px; }
+  .section-title { font-size: 20px; color: var(--primary-dark); margin: 8px 0 16px; }
+
+  .hidden { display: none !important; }
+  .mt20 { margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar">
+  <span class="brand">📄 中医药政策文献智能评价系统</span>
+  <div class="nav-links">
+    <a id="navMain" class="active" onclick="switchView('main')">🏠 主界面</a>
+    <a id="navGallery" onclick="switchView('gallery')">🏆 优秀文献展馆</a>
+    <a href="/ecoeval/" target="_blank">📊 卫生经济学综合评价 →</a>
+    <span class="user-chip" id="userChip"></span>
+    <a onclick="logout()">登出</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- 登录视图 -->
+  <div id="loginView" class="login-wrap hidden">
+    <h1>📄 中医药政策文献智能评价系统</h1>
+    <p class="sub">基于 GLM-4 大模型 | 7项一级指标 16项二级指标 | 百分制评分</p>
+    <label>用户名 / Username</label>
+    <input type="text" id="loginUser" placeholder="请输入用户名" autocomplete="username">
+    <label>密码 / Password</label>
+    <input type="password" id="loginPass" placeholder="请输入密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" onclick="doLogin()">登录 / Login</button>
+    <div class="err" id="loginErr"></div>
+    <p class="hint">默认账号 root / ABC / DEF / HIJK，密码 123456</p>
+  </div>
+
+  <!-- 主界面视图 -->
+  <div id="mainView" class="hidden">
+
+    <!-- 上传 -->
+    <div id="uploadZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
+      <div class="icon">📁</div>
+      <h3>点击上传或拖拽文献到此处</h3>
+      <p>支持 PDF / DOCX，单次最多 5 个文件</p>
+      <input type="file" id="fileInput" accept=".pdf,.docx" multiple onchange="addFiles(event.target.files)">
+    </div>
+
+    <div id="fileList" class="file-list"></div>
+    <div id="actionRow" class="action-row hidden">
+      <button class="btn btn-primary" id="uploadBtn" onclick="startEvaluation()">🚀 开始智能评价</button>
+      <button class="btn btn-ghost" onclick="resetUpload()">清空</button>
+    </div>
+
+    <!-- 加载中 -->
+    <div id="loadingBox" class="spinner-box hidden">
+      <div class="spinner"><span id="loadingText">正在上传并调用大模型评价...</span><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <p class="tip">单篇文献约需 1.5~3 分钟，批量会更久，请耐心等待</p>
+    </div>
+
+    <!-- 错误 -->
+    <div id="errorBox" class="hidden">
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <!-- 结果 -->
+    <div id="resultBox" class="hidden"></div>
+
+    <!-- 历史 -->
+    <div class="mt20">
+      <h2 class="section-title">📜 历史评价记录</h2>
+      <table class="history-table">
+        <thead><tr><th>文献名称</th><th>综合得分</th><th>评价时间</th><th>操作</th></tr></thead>
+        <tbody id="historyBody"><tr><td colspan="4" style="text-align:center;color:var(--muted)">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 展馆视图 -->
+  <div id="galleryView" class="hidden">
+    <div class="gallery-filters">
+      <label>最低分数阈值</label>
+      <input type="number" id="galleryThreshold" value="80" min="0" max="100" step="5">
+      <label>排序方式</label>
+      <select id="gallerySort">
+        <option value="desc">总分从高到低</option>
+        <option value="asc">总分从低到高</option>
+        <option value="recent">最近评价</option>
+      </select>
+      <button class="btn btn-primary" onclick="loadGallery()">刷新</button>
+    </div>
+    <div id="galleryStats"></div>
+    <div id="galleryBody"><p style="color:var(--muted)">加载中...</p></div>
+  </div>
+
+</div>
+
+<script>
+// ── 状态 ──────────────────────────────────────────────────────
+let token = localStorage.getItem('tcm_token') || '';
+let username = localStorage.getItem('tcm_user') || '';
+let selectedFiles = [];
+let currentCharts = [];
+
+// ── 视图切换 ──────────────────────────────────────────────────
+function switchView(view) {
+  document.getElementById('navMain').classList.toggle('active', view === 'main');
+  document.getElementById('navGallery').classList.toggle('active', view === 'gallery');
+  document.getElementById('mainView').classList.toggle('hidden', view !== 'main');
+  document.getElementById('galleryView').classList.toggle('hidden', view !== 'gallery');
+  if (view === 'main') { loadHistory(); }
+  if (view === 'gallery') { loadGallery(); }
+}
+
+function showAuthedUI() {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('navbar').classList.remove('hidden');
+  document.getElementById('userChip').textContent = username;
+  document.getElementById('mainView').classList.remove('hidden');
+  switchView('main');
+}
+
+function showLoginUI() {
+  document.getElementById('navbar').classList.add('hidden');
+  document.getElementById('mainView').classList.add('hidden');
+  document.getElementById('galleryView').classList.add('hidden');
+  document.getElementById('loginView').classList.remove('hidden');
+}
+
+// ── 登录 ──────────────────────────────────────────────────────
+async function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value.trim();
+  const err = document.getElementById('loginErr');
+  err.textContent = '';
+  if (!u || !p) { err.textContent = '请输入用户名和密码'; return; }
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: u, password: p}),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { err.textContent = data.detail || '登录失败'; return; }
+    token = data.token; username = data.username;
+    localStorage.setItem('tcm_token', token);
+    localStorage.setItem('tcm_user', username);
+    showAuthedUI();
+  } catch (e) { err.textContent = '网络错误：' + e.message; }
+}
+
+function logout() {
+  token = ''; username = '';
+  localStorage.removeItem('tcm_token'); localStorage.removeItem('tcm_user');
+  resetUpload();
+  showLoginUI();
+}
+
+async function checkAuth() {
+  if (!token) { showLoginUI(); return; }
+  try {
+    const resp = await fetch('/api/auth/verify?token=' + encodeURIComponent(token));
+    if (resp.ok) { const d = await resp.json(); username = d.username; showAuthedUI(); }
+    else { showLoginUI(); }
+  } catch (e) { showLoginUI(); }
+}
+
+// ── 上传 ──────────────────────────────────────────────────────
+function addFiles(files) {
+  for (const f of files) {
+    if (!/\.(pdf|docx)$/i.test(f.name)) { showError('❌ "' + f.name + '" 格式不支持'); continue; }
+    if (selectedFiles.length >= 5) { showError('最多上传 5 个文件'); break; }
+    if (!selectedFiles.some(s => s.name === f.name && s.size === f.size)) selectedFiles.push(f);
+  }
+  renderFileList();
+}
+
+function renderFileList() {
+  const box = document.getElementById('fileList');
+  if (selectedFiles.length === 0) { box.innerHTML = ''; document.getElementById('actionRow').classList.add('hidden'); return; }
+  document.getElementById('actionRow').classList.remove('hidden');
+  box.innerHTML = selectedFiles.map((f, i) => `
+    <div class="file-item"><span>📄 ${f.name} <span style="color:#999">(${(f.size/1024).toFixed(0)} KB)</span></span>
+    <span class="rm" onclick="removeFile(${i})">✕</span></div>`).join('');
+  document.getElementById('uploadBtn').textContent = `🚀 开始智能评价（${selectedFiles.length} 个文件）`;
+}
+
+function removeFile(i) { selectedFiles.splice(i, 1); renderFileList(); }
+function resetUpload() { selectedFiles = []; document.getElementById('fileInput').value=''; renderFileList(); hideError(); }
+
+// ── 评价 ──────────────────────────────────────────────────────
+function startEvaluation() {
+  if (selectedFiles.length === 0) return;
+  clearCharts();
+  document.getElementById('uploadZone').classList.add('hidden');
+  document.getElementById('actionRow').classList.add('hidden');
+  document.getElementById('resultBox').classList.add('hidden');
+  hideError();
+  document.getElementById('loadingBox').classList.remove('hidden');
+
+  const isBatch = selectedFiles.length > 1;
+  document.getElementById('loadingText').textContent = isBatch
+    ? `正在评价 ${selectedFiles.length} 个文献...`
+    : `正在评价「${selectedFiles[0].name}」...`;
+
+  const form = new FormData();
+  if (isBatch) { selectedFiles.forEach(f => form.append('files', f)); }
+  else { form.append('file', selectedFiles[0]); form.append('doc_name', selectedFiles[0].name); }
+
+  const endpoint = isBatch ? '/api/evaluate/batch' : '/api/evaluate/upload';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 900000); // 15min
+
+  fetch(endpoint, { method: 'POST', body: form, signal: controller.signal })
+    .then(resp => resp.json())
+    .then(data => {
+      clearTimeout(timeoutId);
+      document.getElementById('loadingBox').classList.add('hidden');
+      if (isBatch) { renderBatchResults(data); }
+      else { renderSingleResult(data); }
+      loadHistory();
+    })
+    .catch(err => {
+      clearTimeout(timeoutId);
+      document.getElementById('loadingBox').classList.add('hidden');
+      document.getElementById('uploadZone').classList.remove('hidden');
+      document.getElementById('actionRow').classList.remove('hidden');
+      if (err.name === 'AbortError') showError('处理超时（超过15分钟）。建议分批上传或减小文件');
+      else showError('请求失败：' + err.message);
+    });
+}
+
+// ── 结果渲染 ──────────────────────────────────────────────────
+function renderSingleResult(resp) {
+  if (resp.detail) { showError(resp.detail); document.getElementById('uploadZone').classList.remove('hidden'); document.getElementById('actionRow').classList.remove('hidden'); return; }
+  document.getElementById('resultBox').innerHTML = buildResultHTML(resp);
+  document.getElementById('resultBox').classList.remove('hidden');
+  document.getElementById('uploadZone').classList.remove('hidden');
+  document.getElementById('actionRow').classList.remove('hidden');
+  renderCharts(resp);
+}
+
+function renderBatchResults(batch) {
+  const success = (batch.results || []).filter(r => r.status === 'success');
+  const errors = (batch.results || []).filter(r => r.status === 'error');
+  let html = `<div class="card"><h2 style="color:var(--primary-dark);margin-bottom:12px">📊 批量评价报告</h2>
+    <div class="score-row" style="gap:40px">
+      <div><div style="font-size:32px;font-weight:700;color:var(--primary-dark)">${batch.success_count||success.length}</div><div style="color:var(--muted);font-size:13px">成功</div></div>
+      <div><div style="font-size:32px;font-weight:700;color:var(--bad)">${batch.error_count||errors.length}</div><div style="color:var(--muted);font-size:13px">失败</div></div>
+      <div><div style="font-size:32px;font-weight:700">${(batch.results||[]).length}</div><div style="color:var(--muted);font-size:13px">总计</div></div>
+    </div></div>`;
+
+  for (const r of (batch.results || [])) {
+    if (r.status === 'error') {
+      html += `<div class="card"><div class="error-msg">❌ ${esc(r.filename)}：${esc(r.error || '评价失败')}</div></div>`;
+    } else {
+      html += `<div class="card"><h3 style="margin-bottom:14px">📄 ${esc(r.filename)} — ${(r.result.total_score||0).toFixed(1)} 分</h3>`;
+      html += buildResultHTML(r.result, false);
+      html += `</div>`;
+    }
+  }
+  document.getElementById('resultBox').innerHTML = html;
+  document.getElementById('resultBox').classList.remove('hidden');
+  document.getElementById('uploadZone').classList.remove('hidden');
+  document.getElementById('actionRow').classList.remove('hidden');
+}
+
+function buildResultHTML(resp, includeCharts = true) {
+  const total = resp.total_score, base = resp.base_score;
+  const bonus = (resp.additional_results || []).reduce((s,a)=>s+(a.score||0), 0);
+  const maxTotal = (resp.additional_results && resp.additional_results.length) ? 110 : 100;
+  let html = `
+    <div class="score-row">`;
+  if (includeCharts) {
+    html += `
+      <div class="gauge-box"><canvas id="gaugeChart"></canvas>
+        <div class="gauge-num"><b>${total.toFixed(1)}</b><span>综合得分 / ${maxTotal}</span></div>
+      </div>`;
+  }
+  html += `
+      <div class="score-meta">
+        <h2>评价报告</h2>
+        <div class="meta-line">📄 文献名称：${esc(resp.doc_name)}</div>
+        <div class="meta-line">🕐 评价时间：${esc(resp.timestamp || '')}</div>
+        <div class="meta-line">🧮 基础分 ${base.toFixed(1)} / 100${bonus ? `，附加分 ${bonus>0?'+':''}${bonus}` : ''}</div>`;
+
+  if (resp.excluded_indicators && resp.excluded_indicators.length) {
+    html += `<div class="excluded-info">ℹ️ 以下指标因文献不含对应内容已自动跳过，评分已等比缩放：${esc(resp.excluded_indicators.join('、'))}</div>`;
+  }
+  html += `</div></div>`;
+
+  if (bonus) {
+    html += `<div class="bonus-box"><b>附加项</b>（合计 <b style="color:${bonus>0?'var(--good)':'var(--bad)'}">${bonus>0?'+':''}${bonus}</b>）：<br>` +
+      (resp.additional_results||[]).map(a => `${esc(a.name)}：${a.score>0?'+':''}${a.score} 分 — ${esc(a.comment||'')}`).join('<br>') + `</div>`;
+  }
+
+  if (includeCharts) {
+    html += `<div class="charts-row">
+      <div class="chart-box"><canvas id="radarChart"></canvas></div>
+      <div class="chart-box"><canvas id="barChart"></canvas></div>
+    </div>`;
+  }
+
+  html += `<h3 style="margin:20px 0 10px;color:var(--primary-dark)">分指标评价详情</h3>`;
+  for (const p of (resp.primary_results || [])) {
+    const pct = p.weight ? (p.score / p.weight * 100) : 0;
+    html += `<div class="primary-card">
+      <div class="p-head"><span class="p-name">${esc(p.id)}、${esc(p.name)}</span>
+        <span class="p-score" style="color:${scoreColor(p.score,p.weight)}">${p.score} / ${p.weight} 分（${pct.toFixed(0)}%）</span></div>`;
+    for (const s of (p.secondary_results || [])) {
+      const ratio = s.max_score ? (s.score/s.max_score*100) : 0;
+      html += `<div class="sec-card">
+        <div class="s-head"><span class="s-name">${esc(s.id)} ${esc(s.name)}</span>
+          <span class="s-score" style="color:${scoreColor(s.score,s.max_score)}">${s.score} / ${s.max_score} 分（${ratio.toFixed(0)}%）</span></div>`;
+      if (s.evidence) html += `<div class="evidence">📌 证据：${esc(s.evidence)}</div>`;
+      if (s.comment) html += `<div class="comment">💬 ${esc(s.comment)}</div>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  html += `<div class="card"><h3 style="margin-bottom:8px;color:var(--primary-dark)">综合评价</h3>
+    <div class="overall-comment">${esc(resp.overall_comment || '')}</div></div>`;
+
+  // 报告下载按钮
+  if (resp.id) {
+    html += `<div class="card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <span style="font-weight:600">下载评价报告：</span>
+      <a class="btn btn-primary" style="text-decoration:none" href="/api/history/${resp.id}/report?fmt=docx">Word 文档</a>
+      <a class="btn btn-ghost" style="text-decoration:none" href="/api/history/${resp.id}/report?fmt=pdf">PDF 报告</a>
+      <a class="btn btn-ghost" style="text-decoration:none" href="/api/history/${resp.id}/report?fmt=txt">纯文本</a>
+    </div>`;
+  }
+  return html;
+}
+
+// ── 图表 ──────────────────────────────────────────────────────
+function scoreColor(s, m) {
+  if (!m) return '#999';
+  const r = s/m;
+  if (r >= 0.85) return 'var(--good)'; if (r >= 0.7) return '#43a047'; if (r >= 0.5) return 'var(--mid)'; return 'var(--bad)';
+}
+
+function renderCharts(resp) {
+  const primaries = resp.primary_results || [];
+  const pctValues = primaries.map(p => p.weight ? +(p.score/p.weight*100).toFixed(1) : 0);
+  const labels = primaries.map(p => p.id + ' ' + p.name);
+
+  // 仪表盘
+  if (window.Chart && document.getElementById('gaugeChart')) {
+    currentCharts.push(new Chart(document.getElementById('gaugeChart'), {
+      type: 'doughnut',
+      data: { labels: ['得分','剩余'], datasets: [{ data: [resp.total_score, Math.max(0, 100 - resp.total_score)], backgroundColor: ['#2c7744','#e8e8e8'], borderWidth: 0 }] },
+      options: { cutout: '78%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, responsive: true, maintainAspectRatio: false },
+    }));
+  }
+  // 雷达图
+  if (window.Chart && document.getElementById('radarChart')) {
+    currentCharts.push(new Chart(document.getElementById('radarChart'), {
+      type: 'radar',
+      data: { labels, datasets: [{ label: '得分率(%)', data: pctValues, borderColor: '#2c7744', backgroundColor: 'rgba(44,119,68,0.2)', pointBackgroundColor: '#2c7744' }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } }, plugins: { title: { display: true, text: '一级指标得分率雷达图' } } },
+    }));
+  }
+  // 柱状图
+  if (window.Chart && document.getElementById('barChart')) {
+    currentCharts.push(new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: '得分率(%)', data: pctValues, backgroundColor: pctValues.map(v => v>=70?'#2c7744':v>=50?'#fb8c00':'#e53935') }] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { min:0, max:100 } }, plugins: { legend: { display: false }, title: { display: true, text: '一级指标得分率对比' } } },
+    }));
+  }
+}
+
+function clearCharts() { currentCharts.forEach(c => { try { c.destroy(); } catch(e){} }); currentCharts = []; }
+
+// ── 历史 ──────────────────────────────────────────────────────
+async function loadHistory() {
+  const tbody = document.getElementById('historyBody');
+  try {
+    const resp = await fetch('/api/history?username=' + encodeURIComponent(username) + '&limit=50');
+    const data = await resp.json();
+    const items = data.items || [];
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">暂无记录</td></tr>'; return; }
+    tbody.innerHTML = items.map(h => {
+      const s = h.total_score; const pc = s>=70?'pill-high':s>=50?'pill-mid':'pill-low';
+      return `<tr><td>📄 ${esc(h.doc_name)}</td>
+        <td><span class="pill ${pc}">${s.toFixed(1)}</span></td>
+        <td>${esc(h.timestamp||'')}</td>
+        <td><a onclick="viewHistoryDetail('${h.id}')">查看详情</a><a href="/api/history/${h.id}/report?fmt=docx">下载报告</a></td></tr>`;
+    }).join('');
+  } catch (e) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">加载失败</td></tr>'; }
+}
+
+async function viewHistoryDetail(id) {
+  clearCharts();
+  document.getElementById('uploadZone').classList.add('hidden');
+  document.getElementById('actionRow').classList.add('hidden');
+  document.getElementById('resultBox').classList.remove('hidden');
+  document.getElementById('resultBox').innerHTML = '<div class="spinner-box"><div class="spinner"><span>加载中...</span></div></div>';
+  try {
+    const resp = await fetch('/api/history/' + id);
+    if (!resp.ok) { document.getElementById('resultBox').innerHTML = '<div class="error-msg">记录不存在</div>'; return; }
+    const d = await resp.json();
+    document.getElementById('resultBox').innerHTML = buildResultHTML(d);
+    renderCharts(d);
+  } catch (e) { document.getElementById('resultBox').innerHTML = '<div class="error-msg">加载失败：' + e.message + '</div>'; }
+}
+
+// ── 展馆 ──────────────────────────────────────────────────────
+async function loadGallery() {
+  const body = document.getElementById('galleryBody');
+  const stats = document.getElementById('galleryStats');
+  body.innerHTML = '<p style="color:var(--muted)">加载中...</p>';
+  stats.innerHTML = '';
+  try {
+    const resp = await fetch('/api/history?limit=100');
+    const data = await resp.json();
+    const items = data.items || [];
+    const threshold = parseFloat(document.getElementById('galleryThreshold').value) || 0;
+    const sort = document.getElementById('gallerySort').value;
+    let filtered = items.filter(h => h.total_score >= threshold);
+    if (sort === 'desc') filtered.sort((a,b)=>b.total_score-a.total_score);
+    else if (sort === 'asc') filtered.sort((a,b)=>a.total_score-b.total_score);
+    else filtered.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
+
+    const avg = filtered.length ? (filtered.reduce((s,h)=>s+h.total_score,0)/filtered.length).toFixed(1) : '0';
+    const top = filtered.length ? Math.max(...filtered.map(h=>h.total_score)).toFixed(1) : '0';
+    const excellent = filtered.filter(h=>h.total_score>=88).length;
+    stats.innerHTML = `<div class="score-row" style="gap:40px;margin-bottom:20px">
+      <div><div style="font-size:30px;font-weight:700;color:#b8860b">${filtered.length}</div><div style="color:var(--muted);font-size:13px">展馆收录</div></div>
+      <div><div style="font-size:30px;font-weight:700">${avg}</div><div style="color:var(--muted);font-size:13px">平均得分</div></div>
+      <div><div style="font-size:30px;font-weight:700">${top}</div><div style="color:var(--muted);font-size:13px">最高得分</div></div>
+      <div><div style="font-size:30px;font-weight:700;color:var(--good)">${excellent}</div><div style="color:var(--muted);font-size:13px">卓越/优秀</div></div>
+    </div>`;
+
+    if (!filtered.length) { body.innerHTML = `<p style="color:var(--muted)">暂无评分 ≥ ${threshold} 的文献</p>`; return; }
+
+    body.innerHTML = filtered.map(h => {
+      const stars = h.total_score>=95?'⭐⭐⭐⭐⭐':h.total_score>=88?'⭐⭐⭐⭐':h.total_score>=80?'⭐⭐⭐':'⭐⭐';
+      const grade = h.total_score>=95?'卓越':h.total_score>=88?'优秀':h.total_score>=80?'良好':'一般';
+      return `<div class="exhibit-card">
+        <div class="e-head">
+          <div><span class="e-name">📄 ${esc(h.doc_name)}</span><span class="star-badge">${grade}</span>
+            <div style="font-size:12px;color:#999;margin-top:4px">${esc(h.timestamp||'')}</div></div>
+          <div style="text-align:right"><span class="e-score">${h.total_score.toFixed(1)}</span><span style="color:#666;font-size:13px"> / 100 ${stars}</span></div>
+        </div>
+        <div style="margin-top:10px;font-size:13px;color:#666">${esc((h.overall_comment||'').slice(0,120))}</div>
+        <div style="margin-top:8px"><a href="/api/history/${h.id}/report?fmt=docx" style="color:#b8860b;text-decoration:none;font-size:13px">📋 查看完整报告</a></div>
+      </div>`;
+    }).join('');
+  } catch (e) { body.innerHTML = '<p style="color:var(--bad)">加载失败：' + e.message + '</p>'; }
+}
+
+// ── 工具 ──────────────────────────────────────────────────────
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function showError(msg) { document.getElementById('errorBox').classList.remove('hidden'); document.getElementById('errorMsg').textContent = msg; }
+function hideError() { document.getElementById('errorBox').classList.add('hidden'); }
+
+// 拖拽
+const dz = document.getElementById('uploadZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+
+// ── 启动 ──────────────────────────────────────────────────────
+checkAuth();
+</script>
+</body>
+</html>

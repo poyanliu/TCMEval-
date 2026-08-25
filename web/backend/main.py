@@ -23,6 +23,7 @@ if _project_root not in sys.path:
 from backend.config import API_HOST, API_PORT
 from backend.routers.evaluation import router as evaluation_router
 from backend.routers.history import router as history_router
+from backend.routers.auth import router as auth_router
 from backend.middleware.error_handler import (
     register_exception_handlers,
     AuthMiddleware,
@@ -82,9 +83,23 @@ register_exception_handlers(app)
 # ── Routers ────────────────────────────────────────────────────────
 app.include_router(evaluation_router)
 app.include_router(history_router)
+app.include_router(auth_router)
 
 # ── Static file serving ────────────────────────────────────────────
 from fastapi.responses import FileResponse, HTMLResponse
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    """Serve the main HTML single-page frontend."""
+    frontend_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "frontend", "index.html",
+    )
+    if os.path.exists(frontend_path):
+        with open(frontend_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>前端页面未找到</h1>", status_code=404)
 
 @app.get("/api/upload", response_class=HTMLResponse)
 async def upload_page():

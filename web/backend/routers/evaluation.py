@@ -411,13 +411,12 @@ def evaluate_and_download_report(
     report_bytes = generate_report(response, fmt)
     base_name = response.doc_name.rsplit(".", 1)[0]
 
+    from urllib.parse import quote
+    filename = f"评价报告_{base_name}{get_file_extension(fmt)}"
     return Response(
         content=report_bytes,
         media_type=get_mime_type(fmt),
         headers={
-            "Content-Disposition": (
-                f"attachment; filename*=UTF-8''"
-                f"评价报告_{base_name}{get_file_extension(fmt)}"
-            ),
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
         },
     )

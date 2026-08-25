@@ -21,6 +21,4 @@ data/
 # OS
 .DS_Store
 Thumbs.db
-
-# Claude Code 本地设置
 .claude/

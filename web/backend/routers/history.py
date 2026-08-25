@@ -3,11 +3,13 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
 from backend.models.schemas import (
     HistoryListResponse,
     HistoryRecord,
     ErrorResponse,
+    EvaluationResponse,
     IpStat,
     IpListResponse,
 )
@@ -17,6 +19,11 @@ from backend.services.history_service import (
     delete_record,
     get_ip_list,
     get_total_count,
+)
+from backend.utils.report_generator import (
+    generate_report,
+    get_mime_type,
+    get_file_extension,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,6 +65,51 @@ def get_history_detail(record_id: str) -> HistoryRecord:
             status_code=404, detail=f"记录 {record_id} 不存在"
         )
     return HistoryRecord(**record)
+
+
+@router.get(
+    "/{record_id}/report",
+    responses={404: {"model": ErrorResponse}},
+    summary="下载历史评价报告",
+    description="根据记录 ID 生成并下载指定格式（docx/pdf/txt）的评价报告。",
+)
+def download_history_report(
+    record_id: str,
+    fmt: str = Query("docx", description="报告格式: docx, pdf, txt"),
+) -> Response:
+    """Generate a downloadable report from a saved evaluation record."""
+    if fmt not in ("docx", "pdf", "txt"):
+        raise HTTPException(status_code=400, detail=f"不支持的格式 '{fmt}'，可选 docx/pdf/txt")
+
+    record = get_record(record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"记录 {record_id} 不存在")
+
+    response = EvaluationResponse(
+        id=record["id"],
+        doc_name=record["doc_name"],
+        timestamp=record["timestamp"],
+        total_score=record["total_score"],
+        base_score=record["base_score"],
+        scale_factor=record.get("scale_factor", 1.0),
+        excluded_indicators=record.get("excluded_indicators", []),
+        primary_results=record["primary_results"],
+        additional_results=record["additional_results"],
+        overall_comment=record.get("overall_comment", ""),
+    )
+
+    report_bytes = generate_report(response, fmt)
+    base_name = record["doc_name"].rsplit(".", 1)[0]
+
+    from urllib.parse import quote
+    filename = f"评价报告_{base_name}{get_file_extension(fmt)}"
+    return Response(
+        content=report_bytes,
+        media_type=get_mime_type(fmt),
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        },
+    )
 
 
 @router.delete(
