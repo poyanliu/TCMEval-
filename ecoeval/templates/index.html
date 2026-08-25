@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中医治未病卫生经济学综合评价系统</title>
+<style>
+  :root {
+    --primary: #1a6b4b;
+    --primary-light: #e8f5e9;
+    --danger: #c62828;
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --text-secondary: #607d8b;
+    --border: #e0e0e0;
+    --gold: #f59e0b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a6b4b 0%, #2e7d5b 50%, #1b5e3b 100%);
+    color: #fff; padding: 28px 0; text-align:center; box-shadow: 0 2px 12px rgba(26,107,75,0.25);
+  }
+  .header h1 { font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+  .header p { font-size: 14px; opacity: 0.85; margin-top: 6px; }
+
+  /* Container */
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+  /* Upload Area */
+  .upload-zone {
+    background: var(--card); border: 2px dashed var(--border); border-radius: 16px;
+    padding: 48px 24px; text-align:center; cursor:pointer; transition: all 0.25s;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--primary); background: var(--primary-light); }
+  .upload-zone .icon { font-size: 56px; margin-bottom: 16px; }
+  .upload-zone h3 { font-size: 18px; margin-bottom: 8px; color: var(--text); }
+  .upload-zone p { color: var(--text-secondary); font-size: 14px; }
+  .upload-zone input { display:none; }
+
+  /* Status area */
+  .status { margin-top: 20px; }
+  .status .card {
+    background: var(--card); border-radius: 12px; padding: 24px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+
+  /* Progress */
+  .spinner {
+    display:flex; align-items:center; justify-content:center; gap:12px;
+    color: var(--primary); font-size: 16px; font-weight: 500;
+  }
+  .spinner .dot { width:10px; height:10px; border-radius:50%; background:var(--primary); animation: bounce 1.2s infinite ease-in-out both; }
+  .spinner .dot:nth-child(1) { animation-delay:-0.32s; }
+  .spinner .dot:nth-child(2) { animation-delay:-0.16s; }
+  @keyframes bounce { 0%,80%,100% { transform:scale(0); } 40% { transform:scale(1); } }
+
+  .error-msg { color: var(--danger); background:#fdecea; padding:12px 16px; border-radius:8px; font-size:14px; }
+
+  /* Score Circle */
+  .score-section { text-align:center; margin-bottom: 24px; }
+  .score-circle {
+    width: 140px; height: 140px; border-radius: 50%; display:inline-flex;
+    align-items:center; justify-content:center; font-size:42px; font-weight:800;
+    background: conic-gradient(var(--primary) var(--pct), #e8e8e8 var(--pct));
+    position:relative;
+  }
+  .score-circle::after {
+    content:''; width:116px; height:116px; border-radius:50%; background:#fff;
+    position:absolute;
+  }
+  .score-circle span { position:relative; z-index:1; }
+  .score-label { margin-top:10px; font-size:15px; color: var(--text-secondary); }
+
+  /* Dimension Cards */
+  .dimension-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .dim-card {
+    background: var(--card); border-radius: 12px; padding: 20px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06); border-left: 4px solid var(--primary);
+    transition: box-shadow 0.2s;
+  }
+  .dim-card:hover { box-shadow: 0 3px 14px rgba(0,0,0,0.10); }
+  .dim-card .dim-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .dim-card .dim-name { font-weight: 600; font-size: 15px; flex:1; }
+  .dim-card .dim-badge { font-size:12px; padding:3px 10px; border-radius:20px; font-weight:600; }
+  .badge-green { background:#e8f5e9; color:#1a6b4b; }
+  .dim-card .indicators { max-height: 300px; overflow-y: auto; }
+  .dim-card .ind-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom: 1px dotted #eee; font-size:13px; }
+  .dim-card .ind-row:last-child { border-bottom:none; }
+  .dim-card .ind-name { flex:1; color: var(--text-secondary); }
+  .dim-card .ind-score { font-weight:600; min-width:36px; text-align:right; margin:0 8px; }
+  .dim-card .ind-bar { width:80px; height:6px; background:#eee; border-radius:3px; overflow:hidden; }
+  .dim-card .ind-bar-fill { height:100%; border-radius:3px; }
+
+  /* Summary */
+  .summary-box { background: #f9fafb; border-radius:10px; padding:16px 20px; margin-bottom:20px; font-size:14px; line-height:1.7; }
+  .suggestions { margin-top:16px; }
+  .suggestions h4 { font-size:15px; margin-bottom:8px; color: var(--primary); }
+  .suggestions li { font-size:13px; margin:4px 0; padding-left:8px; color: var(--text-secondary); }
+
+  /* History Table */
+  .history-section { margin-top: 40px; }
+  .history-section h2 { font-size:20px; margin-bottom:16px; }
+  .history-table { width:100%; border-collapse:collapse; background:var(--card); border-radius:12px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,0.06); }
+  .history-table th { background:#f0f4f3; padding:12px 16px; text-align:left; font-size:13px; font-weight:600; color: var(--text-secondary); }
+  .history-table td { padding:10px 16px; font-size:14px; border-bottom:1px solid var(--border); }
+  .history-table tr:hover td { background: #fafdfb; }
+  .history-table a { color: var(--primary); text-decoration:none; font-weight:500; }
+  .history-table a:hover { text-decoration:underline; }
+  .score-pill {
+    display:inline-block; padding:3px 12px; border-radius:20px; font-weight:700; font-size:13px;
+  }
+  .pill-high { background:#e8f5e9; color:#1a6b4b; }
+  .pill-mid { background:#fff8e1; color:#e65100; }
+  .pill-low { background:#fdecea; color:#c62828; }
+
+  .back-btn { display:inline-block; margin-bottom:16px; color:var(--primary); cursor:pointer; font-size:14px; }
+  .back-btn:hover { text-decoration:underline; }
+
+  /* Uploaded file info */
+  .file-info { display:flex; align-items:center; gap:10px; margin-top:12px; font-size:14px; color:var(--text-secondary); }
+  .file-info .file-icon { font-size:24px; }
+
+  .hidden { display:none !important; }
+
+  @media (max-width:640px) {
+    .dimension-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size:20px; }
+    .container { padding:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>中医治未病卫生经济学综合评价</h1>
+  <p>上传研究文档，AI 智能解析并基于指标体系自动评分</p>
+</div>
+
+<div class="container">
+
+  <!-- Upload Zone -->
+  <div id="uploadZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">📄</div>
+    <h3>点击上传或拖拽文件到这里</h3>
+    <p>支持 .docx / .pdf 格式，最大 32MB</p>
+    <input type="file" id="fileInput" accept=".docx,.pdf" onchange="handleFile(event)">
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingArea" class="status hidden">
+    <div class="card">
+      <div class="spinner">
+        <span>AI 正在分析评分中</span>
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="errorArea" class="status hidden">
+    <div class="card">
+      <div id="errorMsg" class="error-msg"></div>
+      <button onclick="resetUpload()" style="margin-top:12px; background:var(--primary); color:#fff; border:none; padding:8px 20px; border-radius:6px; cursor:pointer; font-size:14px;">重新上传</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="resultArea" class="status hidden">
+    <div class="card">
+      <div class="score-section">
+        <div class="score-circle" id="scoreCircle"><span id="scoreVal">--</span></div>
+        <div class="score-label" id="scoreLabel"></div>
+      </div>
+      <div class="summary-box" id="summaryBox"></div>
+      <div class="dimension-grid" id="dimGrid"></div>
+      <div class="suggestions" id="suggestionsBox"></div>
+      <div style="text-align:center; margin-top:20px;">
+        <button onclick="resetUpload()" style="background:var(--primary); color:#fff; border:none; padding:10px 28px; border-radius:8px; cursor:pointer; font-size:14px;">上传新文档评分</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section" id="historySection">
+    <h2>历史评分记录</h2>
+    <table class="history-table">
+      <thead><tr><th>文件名称</th><th>类型</th><th>综合得分</th><th>评分时间</th><th>操作</th></tr></thead>
+      <tbody id="historyBody"><tr><td colspan="5" style="text-align:center;color:var(--text-secondary);">加载中...</td></tr></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// Drag & drop
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) { processFile(e.dataTransfer.files[0]); }
+});
+
+function handleFile(e) { if (e.target.files.length) processFile(e.target.files[0]); }
+
+async function processFile(file) {
+  if (!file.name.match(/\.(docx|pdf)$/i)) {
+    showError('仅支持 .docx 和 .pdf 格式文件'); return;
+  }
+  if (file.size > 32*1024*1024) {
+    showError('文件大小不能超过 32MB'); return;
+  }
+
+  document.getElementById('uploadZone').classList.add('hidden');
+  document.getElementById('loadingArea').classList.remove('hidden');
+  document.getElementById('errorArea').classList.add('hidden');
+  document.getElementById('resultArea').classList.add('hidden');
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const resp = await fetch('/ecoeval/api/upload', { method: 'POST', body: form });
+    const data = await resp.json();
+
+    if (!resp.ok) { showError(data.error || '上传失败'); return; }
+
+    renderResult(data);
+    document.getElementById('loadingArea').classList.add('hidden');
+    document.getElementById('resultArea').classList.remove('hidden');
+    loadHistory();
+  } catch (err) {
+    showError('请求失败：' + err.message);
+  }
+}
+
+function showError(msg) {
+  document.getElementById('loadingArea').classList.add('hidden');
+  document.getElementById('resultArea').classList.add('hidden');
+  document.getElementById('errorMsg').textContent = msg;
+  document.getElementById('errorArea').classList.remove('hidden');
+}
+
+function resetUpload() {
+  document.getElementById('fileInput').value = '';
+  document.getElementById('resultArea').classList.add('hidden');
+  document.getElementById('errorArea').classList.add('hidden');
+  document.getElementById('uploadZone').classList.remove('hidden');
+}
+
+function renderResult(data) {
+  const r = data.result;
+  const score = r.overall_score.toFixed(1);
+
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('scoreCircle').style.setProperty('--pct', (score/100 * 360) + 'deg');
+  document.getElementById('scoreLabel').textContent = '综合加权得分';
+
+  // Summary
+  let summaryHTML = '<strong>文档概要：</strong>' + escapeHtml(r.document_summary || '');
+  summaryHTML += '<br><br><strong>综合评价：</strong>' + escapeHtml(r.overall_assessment || '');
+  document.getElementById('summaryBox').innerHTML = summaryHTML;
+
+  // Dimensions
+  const dimensions = r.dimensions;
+  let gridHTML = '';
+  for (const [name, dim] of Object.entries(dimensions)) {
+    let dimScore = 0, count = 0;
+    let rowsHTML = '';
+    for (const ind of (dim.indicators || [])) {
+      const s = ind.score || 0;
+      dimScore += s * (ind.weight || 0);
+      count++;
+      const color = s >= 80 ? '#1a6b4b' : s >= 50 ? '#f59e0b' : '#c62828';
+      rowsHTML += `<div class="ind-row">
+        <span class="ind-name" title="${escapeHtml(ind.reason || '')}">${ind.seq}. ${escapeHtml(ind.name)}</span>
+        <span class="ind-score">${s}</span>
+        <div class="ind-bar"><div class="ind-bar-fill" style="width:${s}%;background:${color}"></div></div>
+      </div>`;
+    }
+    const pct = count > 0 ? (dimScore / (dim.total_weight || 1)).toFixed(1) : 0;
+    gridHTML += `<div class="dim-card">
+      <div class="dim-header">
+        <span class="dim-name">${escapeHtml(name)}</span>
+        <span class="dim-badge badge-green">${dimScore.toFixed(1)}分 / ${(dim.total_weight||0)}分</span>
+      </div>
+      <div class="indicators">${rowsHTML}</div>
+    </div>`;
+  }
+  document.getElementById('dimGrid').innerHTML = gridHTML;
+
+  // Suggestions
+  let sugHTML = '<h4>改进建议</h4><ul>';
+  for (const s of (r.suggestions || [])) {
+    sugHTML += '<li>' + escapeHtml(s) + '</li>';
+  }
+  sugHTML += '</ul>';
+  document.getElementById('suggestionsBox').innerHTML = sugHTML;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function loadHistory() {
+  try {
+    const resp = await fetch('/ecoeval/api/evaluations');
+    const data = await resp.json();
+    const tbody = document.getElementById('historyBody');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);">暂无记录</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(r => {
+      const s = r.total_score;
+      const pillClass = s >= 70 ? 'pill-high' : s >= 40 ? 'pill-mid' : 'pill-low';
+      return `<tr>
+        <td>📄 ${escapeHtml(r.original_filename)}</td>
+        <td>.${r.file_type}</td>
+        <td><span class="score-pill ${pillClass}">${s.toFixed(1)}</span></td>
+        <td>${r.created_at ? r.created_at.slice(0,16).replace('T',' ') : ''}</td>
+        <td>
+          <a href="#" onclick="viewDetail(${r.id});return false;">查看详情</a>
+          &nbsp;<a href="/ecoeval/api/evaluations/${r.id}/download">下载</a>
+          &nbsp;<a href="/ecoeval/api/evaluations/${r.id}/report">报告下载</a>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('historyBody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);">加载失败</td></tr>';
+  }
+}
+
+async function viewDetail(id) {
+  document.getElementById('uploadZone').classList.add('hidden');
+  document.getElementById('loadingArea').classList.remove('hidden');
+  document.getElementById('errorArea').classList.add('hidden');
+  document.getElementById('resultArea').classList.add('hidden');
+
+  try {
+    const resp = await fetch('/ecoeval/api/evaluations/' + id);
+    if (!resp.ok) { showError('加载详情失败'); return; }
+    const data = await resp.json();
+    renderResult({ total_score: data.total_score, result: data.score_json });
+    document.getElementById('loadingArea').classList.add('hidden');
+    document.getElementById('resultArea').classList.remove('hidden');
+  } catch (err) {
+    showError('请求失败：' + err.message);
+  }
+}
+
+loadHistory();
+</script>
+</body>
+</html>

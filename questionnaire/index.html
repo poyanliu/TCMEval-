@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五行体质辨识问卷</title>
+<style>
+:root { color-scheme: light; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif; background: #f5f0e8; color: #3d3226; line-height: 1.8; min-height: 100vh; }
+.container { max-width: 780px; margin: 0 auto; padding: 24px 20px 60px; }
+
+.header { text-align: center; padding: 32px 20px 24px; background: linear-gradient(135deg, #8b5e3c 0%, #6b3a2a 40%, #a0522d 100%); color: #fff; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 4px 24px rgba(107,58,42,0.15); }
+.header h1 { font-size: 24px; font-weight: 700; letter-spacing: 2px; margin-bottom: 4px; }
+.header p { font-size: 12px; opacity: 0.85; }
+
+/* QR Banner */
+.qr-banner { background: #fff; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.qr-banner .qr-info { flex: 1; min-width: 180px; }
+.qr-banner .qr-info h3 { font-size: 14px; color: #6b3a2a; margin-bottom: 2px; }
+.qr-banner .qr-info p { font-size: 11px; color: #8b7355; }
+.qr-banner #qrCanvas { border-radius: 8px; border: 2px solid #e8dcc8; }
+.qr-banner .qr-url { font-size: 10px; color: #b8a590; word-break: break-all; margin-top: 6px; }
+.qr-placeholder { width:120px; height:120px; background:#f5f0e8; border-radius:8px; border:2px dashed #d4c8b0; display:flex; align-items:center; justify-content:center; font-size:11px; color:#b8a590; text-align:center; flex-shrink:0; }
+
+.progress-wrap { background: #fff; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.progress-label { display: flex; justify-content: space-between; font-size: 12px; color: #8b7355; margin-bottom: 5px; }
+.progress-bar { height: 7px; background: #e8dcc8; border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #c49a6c, #8b5e3c); border-radius: 4px; transition: width 0.4s ease; }
+
+.section-title { font-size: 18px; font-weight: 700; color: #6b3a2a; margin-bottom: 3px; }
+.section-subtitle { font-size: 11px; color: #8b7355; margin-bottom: 14px; }
+
+.element-badge { display: inline-block; padding: 3px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; color: #fff; }
+.wood { background: #5b8c3e; } .fire { background: #c0392b; } .earth { background: #d4a017; } .metal { background: #909090; color: #333; } .water { background: #2c3e50; }
+
+.q-card { background: #fff; border-radius: 12px; padding: 16px 22px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); border-left: 4px solid transparent; transition: border-color 0.3s; }
+.q-card.answered { border-left-color: #8b5e3c; }
+.q-card .q-num { font-size: 10px; color: #b8a590; margin-bottom: 1px; }
+.q-card .q-text { font-size: 14px; color: #3d3226; margin-bottom: 10px; }
+
+.likert { display: flex; gap: 5px; flex-wrap: wrap; }
+.likert label { flex: 1; min-width: 60px; text-align: center; cursor: pointer; }
+.likert input { display: none; }
+.likert .btn { display: block; padding: 6px 2px; border-radius: 6px; border: 1.5px solid #d4c8b0; background: #faf7f2; font-size: 11px; color: #8b7355; transition: all 0.2s; user-select: none; }
+.likert input:checked + .btn { background: #8b5e3c; color: #fff; border-color: #8b5e3c; }
+.likert .btn:hover { border-color: #c49a6c; background: #f0e8d8; }
+
+.btn-row { display: flex; gap: 12px; margin-top: 22px; justify-content: center; flex-wrap: wrap; }
+.btn-primary { padding: 12px 34px; border-radius: 10px; border: none; background: linear-gradient(135deg, #8b5e3c, #a0522d); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; letter-spacing: 1px; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(107,58,42,0.3); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-secondary { padding: 12px 24px; border-radius: 10px; border: 1.5px solid #d4c8b0; background: #fff; color: #8b7355; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.btn-secondary:hover { border-color: #c49a6c; color: #6b3a2a; }
+
+.phase-banner { text-align: center; padding: 10px 18px; border-radius: 10px; margin-bottom: 18px; font-size: 13px; font-weight: 600; }
+.phase-screening { background: #fdf3e0; color: #a0522d; border: 1px solid #f0d8a0; }
+.phase-detailed { background: #e8f0e0; color: #4a7c3f; border: 1px solid #c0d8b0; }
+.phase-result { background: #f0e8f8; color: #5b3d8c; border: 1px solid #d0c0e8; }
+
+.result-card { background: #fff; border-radius: 16px; padding: 26px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; }
+.result-element { display: inline-block; font-size: 30px; font-weight: 900; margin: 8px 0; padding: 6px 22px; border-radius: 12px; color: #fff; }
+.result-desc { font-size: 13px; color: #5c4a3a; max-width: 500px; margin: 12px auto; line-height: 1.9; }
+.score-table { width: 100%; border-collapse: collapse; margin: 14px 0; }
+.score-table th, .score-table td { padding: 7px 10px; text-align: center; border-bottom: 1px solid #e8dcc8; }
+.score-table th { background: #faf7f2; font-size: 11px; color: #8b7355; }
+.score-table td { font-size: 13px; }
+.score-table .highlight { background: #fdf3e0; font-weight: 700; color: #a0522d; }
+
+.skip-notice { background: #fdf8f0; border: 1px dashed #d4c8b0; border-radius: 10px; padding: 12px 16px; margin: 12px 0; font-size: 12px; color: #8b7355; text-align: center; }
+.skip-notice strong { color: #6b3a2a; }
+
+@media (max-width: 500px) {
+  .header h1 { font-size: 19px; }
+  .likert { gap: 3px; }
+  .likert label { min-width: 48px; }
+  .likert .btn { font-size: 10px; padding: 5px 1px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <h1>五行体质辨识问卷</h1>
+  <p>基于《灵枢·阴阳二十五人》理论 · 约5分钟完成</p>
+</div>
+
+<!-- Auto QR Code Banner -->
+<div class="qr-banner" id="qrBanner">
+  <div class="qr-info">
+    <h3>📱 微信扫码即可测评</h3>
+    <p>长按识别二维码，在微信中打开此问卷</p>
+    <p class="qr-url" id="qrUrl"></p>
+  </div>
+  <canvas id="qrCanvas" width="120" height="120" style="display:none;"></canvas>
+  <div id="qrPlaceholder" class="qr-placeholder">部署后<br>自动显示</div>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-label"><span id="phaseLabel">第一阶段：初步筛查</span><span id="progressText">0 / 15</span></div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
+</div>
+
+<div id="content"></div>
+<div class="btn-row" id="btnRow"></div>
+
+</div>
+
+<script>
+// ==================== AUTO QR CODE (full QR encoder with ECC) ====================
+(function(){
+  var url = window.location.href;
+  if (!url.match(/^https?:\/\//)) return;
+  document.getElementById('qrUrl').textContent = url;
+
+  // --- GF(256) arithmetic for Reed-Solomon ---
+  function gfInit() {
+    var exp = new Array(512), log = new Array(256);
+    var x = 1;
+    for (var i = 0; i < 255; i++) { exp[i] = x; log[x] = i; x <<= 1; if (x & 256) x ^= 285; }
+    for (var i = 255; i < 512; i++) exp[i] = exp[i - 255];
+    return {exp:exp, log:log, mul:function(a,b){ return a&&b ? this.exp[this.log[a]+this.log[b]] : 0; }};
+  }
+  var gf = gfInit();
+
+  // --- Reed-Solomon ECC generator ---
+  function rsGenPoly(nsym) {
+    var g = [1];
+    for (var i = 0; i < nsym; i++) {
+      g.push(0);
+      for (var j = g.length - 1; j > 0; j--)
+        g[j] = g[j - 1] ^ gf.mul(g[j], gf.exp[i]);
+      g[0] = gf.mul(g[0], gf.exp[i]);
+    }
+    return g;
+  }
+
+  function rsEncode(data, nsym) {
+    var gen = rsGenPoly(nsym);
+    var res = data.concat(new Array(nsym).fill(0));
+    for (var i = 0; i < data.length; i++) {
+      var c = res[i];
+      if (c !== 0)
+        for (var j = 0; j < gen.length; j++)
+          res[i + j] ^= gf.mul(gen[j], c);
+    }
+    return res.slice(data.length);
+  }
+
+  // --- QR version lookup (ECC level L) ---
+  var VERSION_CAPS = [0,17,32,53,78,106,134,154,192,230,271,321,367,425,458,520,586,644,718,792,858];
+  var VERSION_ECC = [0,7,10,15,20,26,36,40,48,60,72,80,96,104,120,132,144,168,180,196,212];
+
+  function selectVersion(byteCount) {
+    for (var v = 1; v < VERSION_CAPS.length; v++)
+      if (byteCount <= VERSION_CAPS[v]) return v;
+    return 6; // fallback
+  }
+
+  function buildQRMatrix(data) {
+    // Encode data as ISO-8859-1 bytes
+    var bytes = [];
+    for (var i = 0; i < data.length; i++) {
+      var c = data.charCodeAt(i);
+      bytes.push(c < 256 ? c : 63); // fallback: '?'
+    }
+
+    var version = selectVersion(bytes.length);
+    var n = 17 + version * 4;
+    var dataCodewords = VERSION_CAPS[version];
+    var eccPerBlock = VERSION_ECC[version];
+
+    // Mode 4 (byte): indicator 0100, 8-bit count for V1-9, 16-bit for V10+
+    var bits = '0100';
+    var countBits = version <= 9 ? 8 : 16;
+    var countStr = bytes.length.toString(2);
+    while (countStr.length < countBits) countStr = '0' + countStr;
+    bits += countStr;
+
+    // Append data bytes
+    for (var i = 0; i < bytes.length; i++) {
+      var b = bytes[i].toString(2);
+      while (b.length < 8) b = '0' + b;
+      bits += b;
+    }
+
+    // Terminator
+    var cap = dataCodewords * 8;
+    var term = Math.min(4, cap - bits.length);
+    if (term > 0) bits += '0000'.substring(0, term);
+
+    // Pad to byte boundary
+    while (bits.length % 8 !== 0) bits += '0';
+
+    // Pad to capacity
+    var padBytes = [236, 17];
+    var pi = 0;
+    while (bits.length < cap) {
+      var pb = padBytes[pi].toString(2);
+      while (pb.length < 8) pb = '0' + pb;
+      bits += pb;
+      pi = 1 - pi;
+    }
+
+    // Convert bits to codewords
+    var dataCW = [];
+    for (var i = 0; i < bits.length; i += 8)
+      dataCW.push(parseInt(bits.substring(i, i + 8), 2));
+
+    // Generate ECC (single block for V1-V? at level L)
+    var ecc = rsEncode(dataCW, eccPerBlock);
+
+    // Interleave (simple: data then ECC)
+    var allCW = dataCW.concat(ecc);
+
+    // Build matrix
+    var m = [];
+    for (var r = 0; r < n; r++) { m[r] = []; for (var c = 0; c < n; c++) m[r][c] = 0; }
+
+    // Finder patterns (3 corners)
+    function drawFinder(tr, tc) {
+      for (var r = 0; r < 7; r++)
+        for (var c = 0; c < 7; c++)
+          m[tr+r][tc+c] = (r===0||r===6||c===0||c===6||(r>=2&&r<=4&&c>=2&&c<=4)) ? 1 : 0;
+      for (var i = -1; i <= 7; i++) {
+        if (tr+i>=0&&tr+i<n) {m[tr+i][tc-1]=0; m[tr+i][tc+7]=0;}
+        if (tc+i>=0&&tc+i<n) {m[tr-1][tc+i]=0; m[tr+7][tc+i]=0;}
+      }
+    }
+    drawFinder(0,0); drawFinder(0,n-7); drawFinder(n-7,0);
+
+    // Timing patterns
+    for (var i = 8; i < n - 7; i++) { m[6][i] = (i%2===0)?1:0; m[i][6] = (i%2===0)?1:0; }
+
+    // Alignment patterns (version >= 2)
+    if (version >= 2) {
+      var ap = [];
+      if (version === 2) ap = [6, 18];
+      else if (version <= 6) ap = [6, n - 7];
+      else { var s = (version/7+2)|0; var t = n-7; var d = 2*t/(s-1)|0; for (var i = 0; i < s; i++) ap.push(t - i*d); ap.sort(function(a,b){return a-b;}); }
+      // Place alignment patterns
+      for (var ai = 0; ai < ap.length; ai++)
+        for (var aj = 0; aj < ap.length; aj++) {
+          var ar = ap[ai], ac = ap[aj];
+          // Skip if overlaps with finder
+          if ((ar<9&&ac<9)||(ar<9&&ac>n-9)||(ar>n-9&&ac<9)) continue;
+          for (var r = -2; r <= 2; r++)
+            for (var c = -2; c <= 2; c++)
+              if (ar+r>=0 && ar+r<n && ac+c>=0 && ac+c<n)
+                m[ar+r][ac+c] = (r===-2||r===2||c===-2||c===2||(r===0&&c===0)) ? 1 : 0;
+        }
+    }
+
+    // Dark module
+    m[n-8][8] = 1;
+
+    // Reserve format info areas
+    var reserved = [];
+    for (var r = 0; r < n; r++) { reserved[r] = []; for (var c = 0; c < n; c++) reserved[r][c] = false; }
+    // Mark finder areas + separators as reserved
+    for (var fi = 0; fi < 3; fi++) {
+      var fr = [0, 0, n-7][fi], fc = [0, n-7, 0][fi];
+      for (var r = -1; r <= 7; r++)
+        for (var c = -1; c <= 7; c++)
+          if (fr+r>=0&&fr+r<n&&fc+c>=0&&fc+c<n) reserved[fr+r][fc+c] = true;
+    }
+    // Timing patterns
+    for (var i = 0; i < n; i++) { reserved[6][i] = true; reserved[i][6] = true; }
+    // Format info strips
+    for (var i = 0; i <= 8; i++) { reserved[8][i] = true; reserved[i][8] = true; }
+    for (var i = n-8; i < n; i++) reserved[8][i] = true;
+    for (var i = n-7; i < n; i++) reserved[i][8] = true;
+
+    // Bit stream from codewords (MSB first)
+    var bitStream = '';
+    for (var i = 0; i < allCW.length; i++) {
+      var b = allCW[i].toString(2);
+      while (b.length < 8) b = '0' + b;
+      bitStream += b;
+    }
+
+    // Place data modules (zigzag)
+    var idx = 0, col = n - 1, up = true;
+    while (col > 0) {
+      if (col === 6) col--;
+      var rows = [];
+      if (up) { for (var r = n-1; r >= 0; r--) rows.push(r); }
+      else { for (var r = 0; r < n; r++) rows.push(r); }
+      for (var ri = 0; ri < rows.length; ri++) {
+        var r = rows[ri];
+        for (var co = 0; co < 2; co++) {
+          var c = col - co;
+          if (c < 0 || c >= n) continue;
+          if (!reserved[r][c] && m[r][c] === 0) {
+            if (idx < bitStream.length) { m[r][c] = parseInt(bitStream[idx]); idx++; }
+            else m[r][c] = 0;
+          }
+        }
+      }
+      col -= 2; up = !up;
+    }
+
+    // Mask pattern: try several and pick best (use simple mask 2: (row+col)%3==0)
+    // For simplicity, always use mask pattern 2
+    var maskPattern = 2;
+    // Mark all non-reserved, non-function modules
+    var functionMods = [];
+    for (var r = 0; r < n; r++) { functionMods[r] = []; for (var c = 0; c < n; c++) functionMods[r][c] = reserved[r][c]; }
+    // Also mark alignment patterns
+    if (version >= 2) {
+      var ap = [];
+      if (version === 2) ap = [6, 18];
+      else if (version <= 6) ap = [6, n - 7];
+      for (var ai = 0; ai < ap.length; ai++)
+        for (var aj = 0; aj < ap.length; aj++) {
+          var ar = ap[ai], ac = ap[aj];
+          if ((ar<9&&ac<9)||(ar<9&&ac>n-9)||(ar>n-9&&ac<9)) continue;
+          for (var r = -2; r <= 2; r++)
+            for (var c = -2; c <= 2; c++)
+              if (ar+r>=0&&ar+r<n&&ac+c>=0&&ac+c<n) functionMods[ar+r][ac+c] = true;
+        }
+    }
+
+    // Apply mask
+    for (var r = 0; r < n; r++)
+      for (var c = 0; c < n; c++)
+        if (!functionMods[r][c] && ((r + c) % 3 === 0))
+          m[r][c] = 1 - m[r][c];
+
+    // Format info (ECC level L=01, mask pattern)
+    var formatData = '01' + ('000' + maskPattern.toString(2)).slice(-3);
+    var formatVal = 0;
+    for (var i = 0; i < 5; i++) formatVal = (formatVal << 1) | parseInt(formatData[i]);
+    // BCH encode
+    var fv = formatVal << 10;
+    var gp = 0x537;
+    for (var i = 4; i >= 0; i--)
+      if (fv & (1 << (i + 10))) fv ^= gp << i;
+    var fbits = ((formatVal << 10) | (fv & 0x3FF)) ^ 0x5412;
+    var fstr = '';
+    for (var i = 14; i >= 0; i--) fstr += (fbits >> i) & 1;
+
+    // Place format info
+    var fp1 = [[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[7,8],[8,8],[8,7],[8,5],[8,4],[8,3],[8,2],[8,1],[8,0]];
+    for (var i = 0; i < 15 && i < fp1.length; i++) m[fp1[i][0]][fp1[i][1]] = parseInt(fstr[i]);
+    var fp2 = [[n-1,8],[n-2,8],[n-3,8],[n-4,8],[n-5,8],[n-6,8],[n-7,8],[8,n-7],[8,n-6],[8,n-5],[8,n-4],[8,n-3],[8,n-2],[8,n-1],[8,n-8]];
+    for (var i = 0; i < 15 && i < fp2.length; i++) {
+      if (fp2[i][0]>=0&&fp2[i][0]<n&&fp2[i][1]>=0&&fp2[i][1]<n)
+        m[fp2[i][0]][fp2[i][1]] = parseInt(fstr[i]);
+    }
+
+    return m;
+  }
+
+  try {
+    var modules = buildQRMatrix(url);
+    var canvas = document.getElementById('qrCanvas');
+    canvas.width = 200; canvas.height = 200;
+    var sz = 200, border = 2, cell = Math.floor(sz / (modules.length + border*2));
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sz, sz);
+    ctx.fillStyle = '#3d3226';
+    for (var r = 0; r < modules.length; r++)
+      for (var c = 0; c < modules[r].length; c++)
+        if (modules[r][c]) ctx.fillRect((c+border)*cell, (r+border)*cell, cell, cell);
+    canvas.style.display = 'block';
+    var ph = document.getElementById('qrPlaceholder');
+    if (ph) ph.style.display = 'none';
+    document.getElementById('qrUrl').style.display = 'block';
+  } catch(e) {
+    console.log('QR auto-gen error:', e);
+    document.getElementById('qrPlaceholder').textContent = '二维码生成失败\n请截图此URL手动生成';
+  }
+})();
+
+// ==================== QUESTIONNAIRE ====================
+var LIKERT = [{v:1,l:'完全不符合'},{v:2,l:'不太符合'},{v:3,l:'一般'},{v:4,l:'比较符合'},{v:5,l:'完全符合'}];
+var EL = {wood:{n:'木',e:'🌿',c:'wood',col:'#5b8c3e',fn:'木形人'},fire:{n:'火',e:'🔥',c:'fire',col:'#c0392b',fn:'火形人'},earth:{n:'土',e:'🏔️',c:'earth',col:'#d4a017',fn:'土形人'},metal:{n:'金',e:'⚔️',c:'metal',col:'#909090',fn:'金形人'},water:{n:'水',e:'💧',c:'water',col:'#2c3e50',fn:'水形人'}};
+var KEYS = ['wood','fire','earth','metal','water'];
+var ITEMS = {
+wood:[{id:'w01',t:'您的面色偏青色',s:1},{id:'w02',t:'您的眼睛细长'},{id:'w03',t:'您的头部略小'},{id:'w04',t:'您的身材偏瘦高'},{id:'w05',t:'您的肩部较宽'},{id:'w06',t:'您的四肢细长'},{id:'w07',t:'您的手指较细长'},{id:'w08',t:'您的手脚灵活'},{id:'w09',t:'您的性格内向，喜安静',s:1},{id:'w10',t:'您平时容易焦虑'},{id:'w11',t:'您容易多愁善感'},{id:'w12',t:'您能适应春夏季节，而不能耐受秋冬季',s:1},{id:'w13',t:'您对风邪的适应和耐受能力差'},{id:'w14',t:'您善于从事脑力劳动'},{id:'w15',t:'您好动，但体力稍差'}],
+fire:[{id:'f01',t:'您的面色偏红',s:1},{id:'f02',t:'您的脸型偏瘦'},{id:'f03',t:'您的五官皆小'},{id:'f04',t:'您的体型丰满强壮'},{id:'f05',t:'您的肩背腰腹宽厚'},{id:'f06',t:'您的臀部较大'},{id:'f07',t:'您的大腿肌肉丰满'},{id:'f08',t:'您的手足不大，肉厚实'},{id:'f09',t:'您的手指指根粗、指头尖'},{id:'f10',t:'您是一个有气魄的人'},{id:'f11',t:'您平时比较好面子'},{id:'f12',t:'您的性格急躁易冲动',s:1},{id:'f13',t:'您能适应春夏季节，而不能耐受秋冬季'},{id:'f14',t:'您对火邪的适应和耐受能力差',s:1},{id:'f15',t:'您精气神十足，充满活力'},{id:'f16',t:'您的大便常干，小便黄'}],
+earth:[{id:'e01',t:'您的面色偏黄',s:1},{id:'e02',t:'您是圆脸型'},{id:'e03',t:'您的嘴巴大且唇厚'},{id:'e04',t:'您的下巴比较宽厚'},{id:'e05',t:'您的身材魁梧健壮'},{id:'e06',t:'您的背部肌肉厚实'},{id:'e07',t:'您的腹部较大'},{id:'e08',t:'您的手足肉较多'},{id:'e09',t:'您的性格偏稳重敦厚',s:1},{id:'e10',t:'您的性情温和'},{id:'e11',t:'您的忠厚坚定'},{id:'e12',t:'您能适应秋冬季节，而不能耐受春夏季',s:1},{id:'e13',t:'您对湿邪的适应和耐受力差'},{id:'e14',t:'您举足轻而步履稳重'}],
+metal:[{id:'m01',t:'您的面色偏白',s:1},{id:'m02',t:'您的脸型偏方'},{id:'m03',t:'您的眉骨高'},{id:'m04',t:'您的眼窝深'},{id:'m05',t:'您的颧骨高'},{id:'m06',t:'您的体型较匀称苗条'},{id:'m07',t:'您的身材偏瘦（骨架小、关节不突出）'},{id:'m08',t:'您的手足偏小'},{id:'m09',t:'您的手足软，皮肤细腻'},{id:'m10',t:'您是个精明能干的人'},{id:'m11',t:'您的性格刚强坚毅',s:1},{id:'m12',t:'您平时做事果断'},{id:'m13',t:'您容易固执己见'},{id:'m14',t:'您能耐受秋冬季节而不能耐受春夏',s:1},{id:'m15',t:'您对于燥邪的耐受和适应能力较差'},{id:'m16',t:'您说话声音洪亮'},{id:'m17',t:'您的行动灵便，动作敏捷'}],
+water:[{id:'a01',t:'您的面色偏黑',s:1},{id:'a02',t:'您的腮部较宽'},{id:'a03',t:'您的下巴处棱角分明'},{id:'a04',t:'您的眉毛粗重'},{id:'a05',t:'您的身材偏矮胖',s:1},{id:'a06',t:'您的毛发浓密、深黑'},{id:'a07',t:'您的手足形肥厚，皮肤光滑有光泽'},{id:'a08',t:'您的拇指细小'},{id:'a09',t:'您平时为人较圆滑'},{id:'a10',t:'您平时多疑嫉妒'},{id:'a11',t:'您能耐受秋冬季节而不能耐受春夏'},{id:'a12',t:'您对于寒邪的耐受和适应能力较差',s:1},{id:'a13',t:'您平时比较好动'}]
+};
+var DESCS = {wood:'木形人禀木气而生。面色偏青，身材瘦高，手足细长灵活。性格内向沉静，善于思虑，但易焦虑多愁。适应春夏而畏秋冬，对风邪耐受力差。经络属足厥阴肝经。',fire:'火形人禀火气而生。面色偏红，体态丰满壮实，肩背宽厚。性格急躁直率，有气魄，好面子。适应春夏而畏秋冬，对火邪耐受力差。经络属手少阴心经。',earth:'土形人禀土气而生。面色偏黄，圆脸大嘴，身材魁梧健壮。性格稳重敦厚，性情温和，待人忠诚坚定。适应秋冬而畏春夏，对湿邪耐受力差。经络属足太阴脾经。',metal:'金形人禀金气而生。面色偏白，方脸高眉，身材匀称偏瘦。性格刚强坚毅，做事果断，精明能干，但易固执。适应秋冬而畏春夏，对燥邪耐受力差。经络属手太阴肺经。',water:'水形人禀水气而生。面色偏黑，腮宽下巴分明，身材偏矮胖。为人圆滑灵活，但易多疑善妒。适应秋冬而畏春夏，对寒邪耐受力差。经络属足少阴肾经。'};
+
+var phase='screening', screeningAnswers={}, detailedAnswers={}, topElements=[], detailedItemOrder=[];
+
+function screenItems(){var r=[];for(var k=0;k<KEYS.length;k++)for(var i=0;i<ITEMS[KEYS[k]].length;i++)if(ITEMS[KEYS[k]][i].s)r.push({k:KEYS[k],item:ITEMS[KEYS[k]][i]});return r;}
+function allScreenIds(){return screenItems().map(function(x){return x.item.id;});}
+function answered(ans,ids){return ids.filter(function(id){return ans[id];}).length;}
+
+function updateProgress(){
+  var total,done,label;
+  if(phase==='screening'){var ids=allScreenIds();total=ids.length;done=answered(screeningAnswers,ids);label='第一阶段：初步筛查';}
+  else if(phase==='detailed'){total=detailedItemOrder.length;done=answered(detailedAnswers,detailedItemOrder.map(function(d){return d.item.id;}));label='第二阶段：详细测评';}
+  else{total=1;done=1;label='测评结果';}
+  document.getElementById('phaseLabel').textContent=label;
+  document.getElementById('progressText').textContent=done+' / '+total;
+  document.getElementById('progressFill').style.width=(total>0?Math.round(done/total*100):0)+'%';
+}
+
+function renderRadio(itemId,currentValue){
+  var h='<div class="likert">';
+  for(var i=0;i<LIKERT.length;i++)
+    h+='<label><input type="radio" name="'+itemId+'" value="'+LIKERT[i].v+'"'+(currentValue==LIKERT[i].v?' checked':'')+' onchange="setAnswer(\''+itemId+'\','+LIKERT[i].v+')"><span class="btn">'+LIKERT[i].l+'</span></label>';
+  h+='</div>';return h;
+}
+
+function setAnswer(itemId,value){
+  if(phase==='screening')screeningAnswers[itemId]=value;
+  else detailedAnswers[itemId]=value;
+  var card=document.getElementById('card-'+itemId);
+  if(card)card.className='q-card answered';
+  updateProgress();
+  var btn=document.getElementById('nextBtn');
+  if(!btn)return;
+  if(phase==='screening')btn.disabled=answered(screeningAnswers,allScreenIds())<allScreenIds().length;
+  else btn.disabled=answered(detailedAnswers,detailedItemOrder.map(function(d){return d.item.id;}))<detailedItemOrder.length;
+}
+
+function screeningScores(){
+  var ss={};
+  for(var k=0;k<KEYS.length;k++){var sum=0,cnt=0;
+    for(var i=0;i<ITEMS[KEYS[k]].length;i++)if(ITEMS[KEYS[k]][i].s&&screeningAnswers[ITEMS[KEYS[k]][i].id]){sum+=screeningAnswers[ITEMS[KEYS[k]][i].id];cnt++;}
+    ss[KEYS[k]]=cnt>0?sum/cnt:0;}
+  return ss;
+}
+
+function finishScreening(){
+  if(answered(screeningAnswers,allScreenIds())<allScreenIds().length)return;
+  var ss=screeningScores();
+  var sorted=KEYS.slice().sort(function(a,b){return ss[b]-ss[a];});
+  topElements=sorted.slice(0,2);
+  if(sorted.length>2&&ss[sorted[2]]===ss[sorted[1]])topElements=sorted.filter(function(k){return ss[k]>=ss[sorted[1]];});
+  detailedItemOrder=[];
+  for(var t=0;t<topElements.length;t++)for(var i=0;i<ITEMS[topElements[t]].length;i++)if(!ITEMS[topElements[t]][i].s)detailedItemOrder.push({k:topElements[t],item:ITEMS[topElements[t]][i]});
+  renderDetailed();
+}
+
+function renderDetailed(){
+  phase='detailed';
+  var elNames=topElements.map(function(k){return EL[k].fn;}).join('、');
+  var skipped=KEYS.filter(function(k){return topElements.indexOf(k)<0;});
+  var h='<div class="phase-banner phase-detailed">第二阶段：详细测评<br><small>重点测评 <strong>'+elNames+'</strong>（'+detailedItemOrder.length+'题 · 约3-5分钟）</small></div>';
+  h+='<div class="skip-notice">筛查显示 <strong>'+skipped.map(function(k){return EL[k].fn;}).join('、')+'</strong> 可能性较低，已跳过对应题目。</div>';
+  for(var i=0;i<detailedItemOrder.length;i++){
+    var v=detailedAnswers[detailedItemOrder[i].item.id]||'';
+    h+='<div class="q-card" id="card-'+detailedItemOrder[i].item.id+'"><div class="q-num">第'+(i+1)+'题</div><div class="q-text">'+detailedItemOrder[i].item.t+'</div>'+renderRadio(detailedItemOrder[i].item.id,v)+'</div>';
+  }
+  document.getElementById('content').innerHTML=h;
+  document.getElementById('btnRow').innerHTML='<button class="btn-secondary" onclick="renderScreening()">返回修改</button> <button class="btn-primary" id="nextBtn" onclick="finishDetailed()" disabled>查看结果</button>';
+  updateProgress();
+}
+
+function finalScores(){
+  var ss=screeningScores();
+  var scores={};
+  for(var k=0;k<KEYS.length;k++){
+    var key=KEYS[k],sum=0,cnt=0;
+    for(var i=0;i<ITEMS[key].length;i++){
+      var item=ITEMS[key][i];
+      if(item.s&&screeningAnswers[item.id]){sum+=screeningAnswers[item.id];cnt++;}
+      if(!item.s){
+        if(detailedAnswers[item.id]){sum+=detailedAnswers[item.id];cnt++;}
+        else if(topElements.indexOf(key)<0){sum+=Math.round(ss[key]);cnt++;}
+      }
+    }
+    scores[key]={total:sum,count:cnt,avg:cnt>0?(sum/cnt).toFixed(1):'0.0'};
+  }
+  return scores;
+}
+
+function finishDetailed(){
+  if(answered(detailedAnswers,detailedItemOrder.map(function(d){return d.item.id;}))<detailedItemOrder.length)return;
+  phase='result';
+  var scores=finalScores();
+  var bestKey=KEYS[0];
+  for(var k=1;k<KEYS.length;k++)if(scores[KEYS[k]].total>scores[bestKey].total)bestKey=KEYS[k];
+  var maxScore=scores[bestKey].total;
+  var tiedKeys=KEYS.filter(function(k){return scores[k].total===maxScore;});
+  var resultKey=bestKey,tieNote='';
+  if(tiedKeys.length>1){
+    var ss=screeningScores();tiedKeys.sort(function(a,b){return ss[b]-ss[a];});resultKey=tiedKeys[0];
+    if(ss[tiedKeys[0]]===ss[tiedKeys[1]])tieNote='<p style="margin-top:10px;color:#8b7355;">您的 '+tiedKeys.map(function(k){return EL[k].fn;}).join('与')+' 得分相同（均为'+maxScore+'分），提示可能属于<strong>兼夹体质</strong>，建议结合临床四诊进一步判定。</p>';
+  }
+  var el=EL[resultKey];
+  fetch('/api/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({screeningAnswers:screeningAnswers,detailedAnswers:detailedAnswers,scores:scores,resultKey:resultKey,resultName:el.fn})}).catch(function(e){console.log('Submit error:',e)});
+  var h='<div class="phase-banner phase-result">测评完成</div>';
+  h+='<div class="result-card"><div style="font-size:14px;color:#8b7355;">您的五行体质类型为</div><div class="result-element" style="background:'+el.col+';">'+el.e+' '+el.fn+'</div><div class="result-desc">'+DESCS[resultKey]+'</div>'+tieNote+'</div>';
+  h+='<div style="margin-top:18px;"><div class="section-title">各元素得分详情</div><table class="score-table"><thead><tr><th>类型</th><th>条目数</th><th>总分</th><th>均分</th><th>倾向</th></tr></thead><tbody>';
+  for(var k=0;k<KEYS.length;k++){
+    var key=KEYS[k],e2=EL[key],s=scores[key];
+    var bar='';for(var b=0;b<10;b++)bar+=b<Math.round(s.avg/5*10)?'█':'░';
+    h+='<tr class="'+(key===resultKey?'highlight':'')+'"><td><span class="element-badge '+e2.c+'" style="font-size:10px;">'+e2.e+' '+e2.n+'</span></td><td>'+ITEMS[key].length+'</td><td>'+s.total+'</td><td>'+s.avg+'</td><td style="font-size:10px;font-family:monospace;">'+bar+'</td></tr>';
+  }
+  h+='</tbody></table></div>';
+  h+='<div style="margin-top:16px;background:#faf7f2;border-radius:8px;padding:12px 16px;font-size:11px;color:#8b7355;line-height:1.8;">1. 条目经6位专家内容效度评判（I-CVI≥0.83）<br>2. 筛查阶段15题，详细阶段自动跳转至得分最高的2个元素<br>3. 跳过元素以筛查均分估算<br>4. 本问卷为体质辨识工具，不构成临床诊断</div>';
+  document.getElementById('content').innerHTML=h;
+  document.getElementById('btnRow').innerHTML='<button class="btn-secondary" onclick="renderScreening()">重新测评</button> <button class="btn-primary" onclick="window.print()">打印结果</button>';
+  updateProgress();
+}
+
+function renderScreening(){
+  phase='screening';
+  var si=screenItems();
+  var h='<div class="phase-banner phase-screening">第一阶段：初步筛查（15题 · 约1-2分钟）<br><small>请根据您的实际情况对以下陈述评分，完成后方可进入下一阶段。</small></div>';
+  for(var i=0;i<si.length;i++){
+    var v=screeningAnswers[si[i].item.id]||'';
+    h+='<div class="q-card" id="card-'+si[i].item.id+'"><div class="q-num">第'+(i+1)+'题（筛查）</div><div class="q-text">'+si[i].item.t+'</div>'+renderRadio(si[i].item.id,v)+'</div>';
+  }
+  document.getElementById('content').innerHTML=h;
+  document.getElementById('btnRow').innerHTML='<button class="btn-primary" id="nextBtn" onclick="finishScreening()" disabled>进入下一阶段</button> <button class="btn-secondary" onclick="resetAll()">重新填写</button>';
+  updateProgress();
+}
+
+function resetAll(){screeningAnswers={};detailedAnswers={};topElements=[];detailedItemOrder=[];renderScreening();}
+
+renderScreening();
+</script>
+</body>
+</html>

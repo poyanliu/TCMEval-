@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文献上传 — 中医药政策文献智能评价</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8f0e8 100%);
+            min-height: 100vh; display: flex; justify-content: center; align-items: center;
+        }
+        .container {
+            background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            padding: 3rem; max-width: 560px; width: 90%;
+        }
+        h1 { color: #2c7744; margin-bottom: 0.5rem; font-size: 1.5rem; }
+        .subtitle { color: #666; margin-bottom: 2rem; font-size: 0.95rem; }
+        .drop-zone {
+            border: 2px dashed #2c7744; border-radius: 8px;
+            padding: 2.5rem; text-align: center; cursor: pointer;
+            background: #fafdfa; margin-bottom: 1.5rem;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .drop-zone.dragover { border-color: #1a4d2c; background: #e8f5e9; }
+        .drop-zone p { color: #888; margin-top: 0.5rem; font-size: 0.9rem; }
+        #fileInput { display: none; }
+        #fileList { margin-bottom: 1rem; }
+        .file-item {
+            background: #f0f4f1; padding: 0.5rem 1rem; margin: 0.3rem 0;
+            border-radius: 4px; display: flex; justify-content: space-between;
+            align-items: center; font-size: 0.9rem;
+        }
+        .file-item .remove { color: #e53935; cursor: pointer; font-weight: bold; }
+        button {
+            width: 100%; padding: 0.75rem; border: none; border-radius: 6px;
+            font-size: 1rem; cursor: pointer; font-weight: bold;
+            transition: background 0.2s;
+        }
+        #uploadBtn { background: #2c7744; color: white; }
+        #uploadBtn:hover { background: #1a4d2c; }
+        #uploadBtn:disabled { background: #aaa; cursor: not-allowed; }
+        #status { margin-top: 1rem; font-size: 0.9rem; text-align: center; }
+        .error { color: #e53935; }
+        .success { color: #2c7744; }
+        .info { color: #666; }
+        .back-link { text-align: center; margin-top: 1.5rem; }
+        .back-link a { color: #2c7744; text-decoration: none; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📤 文献上传</h1>
+        <p class="subtitle">支持 PDF / DOCX，单次最多 5 个文件 · HTTP 直传模式</p>
+
+        <div class="drop-zone" id="dropZone">
+            <span style="font-size:2rem;">📁</span>
+            <p>点击选择文件或拖拽到此处</p>
+            <input type="file" id="fileInput" accept=".pdf,.docx" multiple>
+        </div>
+
+        <div id="fileList"></div>
+
+        <button id="uploadBtn" onclick="uploadFiles()">🚀 开始上传并评价</button>
+        <div id="status"></div>
+
+        <div class="back-link">
+            <a href="/literature">← 返回评价系统主页</a>
+        </div>
+    </div>
+
+    <script>
+        const MAX_FILES = 5;
+        let selectedFiles = [];
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const status = document.getElementById('status');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            addFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', e => addFiles(e.target.files));
+
+        function addFiles(files) {
+            for (const f of files) {
+                if (!f.name.endsWith('.pdf') && !f.name.endsWith('.docx')) {
+                    showStatus(`❌ "${f.name}" 格式不支持，请上传 PDF 或 DOCX 文件`, 'error');
+                    continue;
+                }
+                if (selectedFiles.length >= MAX_FILES) {
+                    showStatus(`❌ 最多上传 ${MAX_FILES} 个文件`, 'error');
+                    break;
+                }
+                if (!selectedFiles.some(sf => sf.name === f.name && sf.size === f.size)) {
+                    selectedFiles.push(f);
+                }
+            }
+            renderFileList();
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            renderFileList();
+        }
+
+        function renderFileList() {
+            if (selectedFiles.length === 0) {
+                fileList.innerHTML = '';
+                uploadBtn.disabled = true;
+                return;
+            }
+            uploadBtn.disabled = false;
+            fileList.innerHTML = selectedFiles.map((f, i) => `
+                <div class="file-item">
+                    <span>📄 ${f.name} (${(f.size / 1024).toFixed(0)} KB)</span>
+                    <span class="remove" onclick="removeFile(${i})">✕</span>
+                </div>
+            `).join('');
+            uploadBtn.textContent = `🚀 上传并评价（${selectedFiles.length} 个文件）`;
+        }
+
+        async function uploadFiles() {
+            if (selectedFiles.length === 0) return;
+
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '⏳ 上传并评价中...';
+            const fileCount = selectedFiles.length;
+            showStatus(`📤 正在上传 ${fileCount} 个文件，并调用大模型进行16项指标评价（预计需要 ${fileCount * 1.5}~${fileCount * 3} 分钟）...`, 'info');
+
+            const formData = new FormData();
+            selectedFiles.forEach(f => formData.append('files', f));
+
+            const controller = new AbortController();
+            // 10-minute timeout for evaluation
+            const timeoutId = setTimeout(() => controller.abort(), 600000);
+
+            try {
+                const resp = await fetch('/api/evaluate/batch', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+                const result = await resp.json();
+
+                if (resp.ok && result.results) {
+                    const successCount = result.results.filter(r => r.success).length;
+                    const failCount = result.results.length - successCount;
+                    let msg = `✅ 评价完成！${successCount} 个成功`;
+                    if (failCount > 0) msg += `，${failCount} 个失败`;
+                    msg += `。请返回主页查看结果`;
+                    showStatus(msg, 'success');
+                    uploadBtn.textContent = '✅ 评价完成';
+                    setTimeout(() => { window.location.href = '/literature'; }, 3000);
+                } else {
+                    const detail = result.detail || result.message || JSON.stringify(result);
+                    showStatus(`❌ 评价失败: ${detail}`, 'error');
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = '🔄 重试上传';
+                }
+            } catch (err) {
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') {
+                    showStatus('⏱️ 处理超时（超过10分钟）。文献可能内容较多，建议减小文件或逐个上传', 'error');
+                } else {
+                    showStatus(`❌ 网络错误: ${err.message}。请检查网络后重试`, 'error');
+                }
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '🔄 重试上传';
+            }
+        }
+
+        function showStatus(msg, cls) {
+            status.innerHTML = `<span class="${cls}">${msg}</span>`;
+        }
+
+        // Init
+        uploadBtn.disabled = true;
+    </script>
+</body>
+</html>

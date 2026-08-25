@@ -1,0 +1,171 @@
+<!-- HTTP file upload component: Posts files via standard HTTP POST to bypass WebSocket throttling -->
+<div id="tcm-upload-root" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <style>
+    #tcm-upload-root .drop-zone {
+      border: 2px dashed #2c7744; border-radius: 8px;
+      padding: 1.5rem; text-align: center; cursor: pointer;
+      background: #fafdfa; margin-bottom: 0.75rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #tcm-upload-root .drop-zone.dragover { border-color: #1a4d2c; background: #e8f5e9; }
+    #tcm-upload-root .drop-zone p { color: #888; margin: 0.3rem 0; font-size: 0.85rem; }
+    #tcm-upload-root .file-chip {
+      background: #f0f4f1; padding: 0.4rem 0.8rem; margin: 0.25rem 0;
+      border-radius: 4px; display: flex; justify-content: space-between;
+      align-items: center; font-size: 0.85rem;
+    }
+    #tcm-upload-root .file-chip .remove { color: #e53935; cursor: pointer; font-weight: bold; margin-left: 8px; }
+    #tcm-upload-root button {
+      width: 100%; padding: 0.6rem; border: none; border-radius: 6px;
+      font-size: 0.95rem; cursor: pointer; font-weight: bold; margin-top: 0.5rem;
+    }
+    #tcm-upload-root .btn-go { background: #2c7744; color: white; }
+    #tcm-upload-root .btn-go:hover { background: #1a4d2c; }
+    #tcm-upload-root .btn-go:disabled { background: #aaa; cursor: not-allowed; }
+    #tcm-upload-root .status { margin-top: 0.5rem; font-size: 0.85rem; }
+    #tcm-upload-root .error { color: #e53935; }
+    #tcm-upload-root .success { color: #2c7744; }
+    #tcm-upload-root .info { color: #666; }
+  </style>
+
+  <div class="drop-zone" id="tcm-drop-zone">
+    <span style="font-size:1.5rem;">📁</span>
+    <p>点击或拖拽上传 PDF / DOCX（最多5个）</p>
+    <input type="file" id="tcm-file-input" accept=".pdf,.docx" multiple style="display:none;">
+  </div>
+
+  <div id="tcm-file-list"></div>
+  <button class="btn-go" id="tcm-submit-btn" disabled>🚀 开始智能评价</button>
+  <div class="status" id="tcm-status"></div>
+</div>
+
+<script>
+(function() {
+  const MAX_FILES = 5;
+  let selectedFiles = [];
+
+  const dropZone = document.getElementById('tcm-drop-zone');
+  const fileInput = document.getElementById('tcm-file-input');
+  const fileList = document.getElementById('tcm-file-list');
+  const submitBtn = document.getElementById('tcm-submit-btn');
+  const status = document.getElementById('tcm-status');
+
+  dropZone.addEventListener('click', function() { fileInput.click(); });
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragover'); });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', function(e) { addFiles(e.target.files); });
+
+  function addFiles(files) {
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      if (!f.name.endsWith('.pdf') && !f.name.endsWith('.docx')) {
+        showStatus('❌ "' + f.name + '" 格式不支持，请上传 PDF 或 DOCX', 'error');
+        continue;
+      }
+      if (selectedFiles.length >= MAX_FILES) {
+        showStatus('❌ 最多上传 ' + MAX_FILES + ' 个文件', 'error');
+        break;
+      }
+      if (!selectedFiles.some(function(sf) { return sf.name === f.name && sf.size === f.size; })) {
+        selectedFiles.push(f);
+      }
+    }
+    renderFileList();
+  }
+
+  function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderFileList();
+  }
+
+  function renderFileList() {
+    if (selectedFiles.length === 0) {
+      fileList.innerHTML = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = '🚀 开始智能评价';
+      return;
+    }
+    submitBtn.disabled = false;
+    fileList.innerHTML = selectedFiles.map(function(f, i) {
+      return '<div class="file-chip">' +
+        '<span>📄 ' + f.name + ' (' + (f.size / 1024).toFixed(0) + ' KB)</span>' +
+        '<span class="remove" onclick="removeFile(' + i + ')">✕</span>' +
+        '</div>';
+    }).join('');
+    submitBtn.textContent = '🚀 开始智能评价（' + selectedFiles.length + ' 个文件）';
+  }
+
+  submitBtn.addEventListener('click', function() {
+    if (selectedFiles.length === 0) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ 上传并评价中...';
+    showStatus('📤 正在上传 ' + selectedFiles.length + ' 个文件（HTTP 直传模式）...', 'info');
+
+    var formData = new FormData();
+    selectedFiles.forEach(function(f) { formData.append('files', f); });
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/evaluate/batch', true);
+    xhr.timeout = 600000; // 10 min timeout
+
+    xhr.upload.addEventListener('progress', function(e) {
+      if (e.lengthComputable) {
+        var pct = Math.round((e.loaded / e.total) * 100);
+        submitBtn.textContent = '⏳ 上传中 ' + pct + '%（HTTP 直传）';
+      }
+    });
+
+    xhr.addEventListener('load', function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          var result = JSON.parse(xhr.responseText);
+          showStatus('✅ 评价完成！结果已加载', 'success');
+          submitBtn.textContent = '✅ 评价完成';
+          // Send results back to Streamlit
+          if (window.Streamlit) {
+            Streamlit.setComponentValue(result);
+          }
+        } catch(e) {
+          showStatus('❌ 解析结果失败: ' + e.message, 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = '🔄 重试';
+        }
+      } else {
+        showStatus('❌ 评价失败 (HTTP ' + xhr.status + ')，请重试', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🔄 重试';
+      }
+    });
+
+    xhr.addEventListener('error', function() {
+      showStatus('❌ 网络错误，请检查网络后重试', 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '🔄 重试';
+    });
+
+    xhr.addEventListener('timeout', function() {
+      showStatus('⏱️ 处理超时（超过10分钟），建议减小文件或逐个上传', 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '🔄 重试';
+    });
+
+    xhr.send(formData);
+  });
+
+  function showStatus(msg, cls) {
+    status.innerHTML = '<span class="' + cls + '">' + msg + '</span>';
+  }
+
+  // Signal Streamlit when ready
+  if (window.Streamlit) {
+    Streamlit.setFrameHeight(420);
+    Streamlit.setComponentReady();
+  }
+})();
+</script>

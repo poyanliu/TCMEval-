@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+.venv
+venv
+assets
+components
+.ipynb_checkpoints
+.git
+.env
+*.md

@@ -1,0 +1,14 @@
+[server]
+fileWatcherType = "none"
+runOnSave = false
+maxUploadSize = 50
+enableWebsocketCompression = true
+enableXsrfProtection = false
+enableCORS = false
+
+[browser]
+# Slightly faster initial load
+gatherUsageStats = false
+
+[logger]
+level = "warning"
