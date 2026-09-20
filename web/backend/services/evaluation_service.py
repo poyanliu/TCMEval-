@@ -134,7 +134,8 @@ def build_role_prompt(indicator_id: str) -> str:
         f"【当前评审角色】{role.title}\n"
         f"【专业背景】{role.expertise}\n"
         f"【评审要求】请从{role.title}的专业视角出发，"
-        f"对该指标进行客观、严格的评审。"
+        f"对该指标进行客观、公正的评审，"
+        f"对达到基本要求的文献应给予合理分数，避免过度苛刻。"
     )
 
 
@@ -329,11 +330,14 @@ _REFLECTION_SYSTEM_PROMPT = """你是一位经验丰富的评审委员会主席�
 2. 检查同一一级指标下的二级指标评分比例是否合理
 3. 检查是否存在"评分漂移"——开头过严、结尾过松（或反之）
 4. 检查满分指标是否有充分证据支撑，零分指标是否确实缺乏依据
+5. 检查是否存在系统性偏低——若多项指标明显低于其证据质量应处的档位，应整体上调
 
 【修正原则】
-- 只有在明确发现评分偏差时才修正，不要为了"调整"而调整
-- 修正幅度一般不超过±2分
-- 修正时必须给出具体理由"""
+- 优先上调：发现系统性偏低（多数指标压在"良好"下沿甚至"一般"）时，应整体上调至合理档位
+- 除非指标得分明显虚高且证据不足，否则不要下调
+- 修正幅度一般不超过±2分，若发现系统性偏低可适当放宽上调幅度
+- 修正时必须给出具体理由
+- 达到发表标准、内容充实的合格文献，修正后综合得分应落在 75~88 分；质量突出的可达 88 分以上"""
 
 
 def build_reflection_prompt(
@@ -639,6 +643,45 @@ def reflect_and_refine(
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Custom weights — load from weights.json and override defaults
+# ═══════════════════════════════════════════════════════════════════════
+
+_WEIGHTS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "weights.json",
+)
+
+
+def apply_custom_weights() -> None:
+    """Load custom indicator weights from weights.json and override constants defaults."""
+    if not os.path.exists(_WEIGHTS_FILE):
+        return
+    try:
+        with open(_WEIGHTS_FILE, "r", encoding="utf-8") as f:
+            weights = json.load(f)
+    except Exception:
+        logger.warning("Failed to load weights.json, using default weights")
+        return
+
+    primary_map = {p["id"]: p for p in weights.get("primary_indicators", [])}
+    secondary_map = {}
+    for p in weights.get("primary_indicators", []):
+        for s in p.get("secondary", []):
+            secondary_map[s["id"]] = s.get("max_score")
+
+    for p in PRIMARY_INDICATORS:
+        if p["id"] in primary_map:
+            new_weight = primary_map[p["id"]].get("weight")
+            if new_weight is not None:
+                p["weight"] = int(new_weight)
+        for s in p["secondary"]:
+            if s["id"] in secondary_map:
+                new_score = secondary_map[s["id"]]
+                if new_score is not None:
+                    s["max_score"] = int(new_score)
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Full document evaluation — pipeline orchestrator
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -673,6 +716,7 @@ def evaluate_document(
     Returns:
         EvaluationResponse with all results aggregated.
     """
+    apply_custom_weights()
     start_time = time.time()
     memory = get_memory() if enable_memory else None
     correction_log: list[dict] = []
@@ -873,6 +917,7 @@ async def evaluate_document_async(
     Sequential (evaluate_document) is preferred for local/streamlit use
     because parallel GPU inference can cause VRAM contention.
     """
+    apply_custom_weights()
     start_time = time.time()
     memory = get_memory() if enable_memory else None
 

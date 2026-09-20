@@ -6,7 +6,7 @@ from pathlib import Path
 
 import docx
 import fitz  # PyMuPDF
-from flask import Flask, request, jsonify, send_from_directory, g
+from flask import Flask, request, jsonify, send_from_directory, g, session
 from openai import OpenAI
 from werkzeug.utils import secure_filename
 
@@ -25,6 +25,7 @@ if os.path.exists(_ENV_FILE):
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB
 app.config["UPLOAD_FOLDER"] = "/root/EcoEval/uploads"
+app.config["SECRET_KEY"] = os.environ.get("ECOEVAL_SECRET_KEY", "ecoeval-secret-key-2026")
 
 ALLOWED_EXTENSIONS = {"docx", "pdf", "doc"}
 
@@ -33,7 +34,31 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
-DB_PATH = "/root/EcoEval/evaluations.db"
+DB_PATH = os.environ.get("ECOEVAL_DB_PATH", "/root/EcoEval/evaluations.db")
+
+# 主系统用户数据库（共享账号体系），可通过环境变量覆盖路径
+MAIN_DB_PATH = os.environ.get("TCM_MAIN_DB_PATH", "/root/web/data/evaluations.db")
+
+
+def verify_user(username: str, password: str) -> bool:
+    """验证用户（复用主系统 users 表，PBKDF2-HMAC-SHA256）"""
+    import hashlib
+    try:
+        conn = sqlite3.connect(MAIN_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT password_hash, salt FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        conn.close()
+        if row is None:
+            return False
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), row["salt"].encode("utf-8"), 100000,
+        )
+        return digest.hex() == row["password_hash"]
+    except Exception:
+        return False
 
 
 def get_db():
@@ -93,171 +118,260 @@ def extract_text(filepath, ext):
     return ""
 
 
-EVALUATION_CRITERIA = """
-你是一位中医治未病卫生经济学评价专家。请根据以下评价指标体系，对用户上传的研究文档进行评分。
+CRITERIA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "criteria.json")
 
-## 评分规则
-- 每个三级指标满分100分，根据文档中是否包含该指标相关数据及详细程度打分：
-  - 0分：完全不涉及
-  - 1-30分：仅提及概念，无具体数据
-  - 31-60分：有部分数据但不完整
-  - 61-85分：数据较完整，稍有缺项
-  - 86-100分：数据完整，描述清晰
-- 每个指标得分 × 该指标权重系数（权重% / 100） = 加权得分
-- 总分 = 所有加权得分之和（满分100分）
 
-## 评价指标体系
+def load_criteria():
+    with open(CRITERIA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-### 一、人群基线与中医体质基线指标（总权重15%）
-| 序号 | 二级指标 | 三级指标 | 指标描述 | 权重 |
-|------|---------|---------|---------|------|
-| 1 | 通用人口学基线 | 年龄 | 入组时实际年龄（岁） | 0.6% |
-| 2 | 通用人口学基线 | 性别 | 男/女 | 0.6% |
-| 3 | 通用人口学基线 | 职业 | 公职人员/企业职工/自由职业/退休/学生/其他 | 0.6% |
-| 4 | 通用人口学基线 | 婚姻状况 | 未婚/已婚/离异/丧偶 | 0.6% |
-| 5 | 通用人口学基线 | 文化水平 | 小学及以下/中学/中专/大专/本科及以上 | 0.6% |
-| 6 | 通用人口学基线 | 家庭年收入 | 收入分层数据 | 0.6% |
-| 7 | 通用人口学基线 | 民族 | 汉族/少数民族 | 0.4% |
-| 8 | 通用人口学基线 | 医保类型 | 职工医保/居民医保/新农合/商业保险/无医保 | 0.6% |
-| 9 | 通用人口学基线 | 既往慢病史 | 高血压/糖尿病/冠心病/脑梗/高血脂/其他 | 0.8% |
-| 10 | 通用人口学基线 | 身高 | cm | 0.4% |
-| 11 | 通用人口学基线 | 体重 | kg | 0.4% |
-| 12 | 通用人口学基线 | BMI指数 | 体重(kg)/身高²(m²) | 0.6% |
-| 13 | 通用人口学基线 | 血压 | 收缩压/舒张压（mmHg） | 0.8% |
-| 14 | 通用人口学基线 | 空腹血糖 | mmol/L | 0.8% |
-| 15 | 通用人口学基线 | 糖化血红蛋白 | % | 0.8% |
-| 16 | 通用人口学基线 | 血脂四项 | 总胆固醇、低密度脂蛋白、高密度脂蛋白、甘油三酯 | 0.8% |
-| 17 | 通用人口学基线 | 入组前1年直接医疗总支出 | 药品、检查、住院、诊疗等费用总和（元） | 1.0% |
-| 18 | 中医特色体质基线 | 中医九种体质判定 | 平和质/气虚质/阳虚质/阴虚质/痰湿质/湿热质/血瘀质/气郁质/特禀质 | 1.2% |
-| 19 | 中医特色体质基线 | 中医证候总积分 | 疲乏、失眠、畏寒、胸闷、腹胀、肢体困重等单项证候评分总和 | 1.2% |
-| 20 | 中医特色体质基线 | 单项中医证候积分 | 各单项证候具体评分 | 1.0% |
-| 21 | 中医特色体质基线 | 中医健康素养水平 | 中医养生知识掌握程度问卷得分 | 0.8% |
-| 22 | 中医特色体质基线 | 治未病认知程度 | 完全不了解/了解较少/一般了解/比较了解/非常了解 | 0.8% |
 
-### 二、治未病干预直接成本指标（总权重20%）
-| 序号 | 二级指标 | 三级指标 | 指标描述 | 权重 |
-|------|---------|---------|---------|------|
-| 23 | 中医综合调理干预成本 | 中药膏方/汤药费 | 总费用、医保报销、个人自付（元） | 2.2% |
-| 24 | 中医综合调理干预成本 | 中医外治服务费 | 艾灸、拔罐、刮痧、穴位贴敷、推拿、针灸、耳穴压豆总费用 | 2.2% |
-| 25 | 中医综合调理干预成本 | 中医养生功法指导费 | 八段锦、太极拳、五禽戏、导引等教学服务费 | 1.8% |
-| 26 | 中医综合调理干预成本 | 中医体质辨识费 | 体质辨识评估、建档费用 | 1.8% |
-| 27 | 中医综合调理干预成本 | 健康随访管理费 | 季度随访、体质复评、健康咨询服务费 | 2.0% |
-| 28 | 中医综合调理干预成本 | 食疗养生指导费用 | 药食同源食材、药膳调理配套支出 | 2.0% |
-| 29 | 西医配套及其他成本 | 常规药品费用 | 降压、降糖、调脂等慢病西药 | 1.8% |
-| 30 | 西医配套及其他成本 | 检查检验费用 | 血压、血糖、血脂、影像学等年度筛查费用 | 1.6% |
-| 31 | 西医配套及其他成本 | 住院诊疗费用 | 慢病急性发作住院、并发症住院 | 1.8% |
-| 32 | 西医配套及其他成本 | 不良事件处置费用 | 中医干预相关不适、慢病急性加重急诊/住院费用 | 1.4% |
-| 33 | 西医配套及其他成本 | 其他直接成本 | 门诊费、注射费、耗材费等 | 1.4% |
+def _get_client():
+    return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
 
-### 三、中西医临床产出与中医特色疗效指标（总权重25%）
-| 序号 | 二级指标 | 三级指标 | 指标描述 | 权重 |
-|------|---------|---------|---------|------|
-| 34 | 西医客观生理结局 | 体重变化 | 干预前后体重差值（kg） | 0.8% |
-| 35 | 西医客观生理结局 | BMI变化 | 干预前后BMI差值 | 0.8% |
-| 36 | 西医客观生理结局 | 血压达标率 | 收缩压<140且舒张压<90人数及占比 | 1.2% |
-| 37 | 西医客观生理结局 | 糖代谢指标变化 | 空腹血糖、糖化血红蛋白干预前后差值 | 1.2% |
-| 38 | 西医客观生理结局 | 血脂达标率 | 血脂四项达标人数及占比 | 1.2% |
-| 39 | 西医客观生理结局 | 慢病新发病例情况 | 高血压、糖尿病、血脂异常新发人数、相对风险降低率 | 1.6% |
-| 40 | 西医客观生理结局 | 心脑血管不良事件 | 心肌梗死、脑卒中、严重并发症发生频次 | 1.2% |
-| 41 | 通用生命质量产出 | 健康效用值(QALY) | EQ-5D-5L量表测算质量调整生命年 | 1.6% |
-| 42 | 通用生命质量产出 | SF-36生存质量总分 | 生理功能、躯体疼痛、社会功能、精神健康维度得分 | 1.4% |
-| 43 | 通用生命质量产出 | EQ-5D各维度受损水平 | 行动、自理、日常活动、疼痛不适、焦虑抑郁分级 | 1.0% |
-| 44 | 中医特色治未病疗效产出 | 中医体质改善转归率 | 偏颇质转为平和质、偏颇质积分下降人群占比 | 2.2% |
-| 45 | 中医特色治未病疗效产出 | 中医证候总积分下降值 | 干预前后证候积分差值 | 2.0% |
-| 46 | 中医特色治未病疗效产出 | 单项中医症状缓解率 | 失眠、乏力、畏寒、腹胀、肩颈酸痛等症状改善人数占比 | 1.8% |
-| 47 | 中医特色治未病疗效产出 | 既病防变进展延缓率 | 慢病高危人群进展为确诊慢病比例下降幅度 | 2.0% |
-| 48 | 中医特色治未病疗效产出 | 瘥后防复复发率 | 慢病康复人群年度急性复发频次、复发下降比例 | 1.8% |
-| 49 | 中医特色治未病疗效产出 | 中医养生依从性 | 规律坚持功法、食疗、外治干预人群占比 | 1.6% |
-| 50 | 中医特色治未病疗效产出 | 治未病三级预防阶段适配度 | 未病先防/既病防变/瘥后防复匹配干预场景精准度 | 1.6% |
 
-### 四、间接疾病经济负担指标（总权重15%）
-| 序号 | 二级指标 | 三级指标 | 指标描述 | 权重 |
-|------|---------|---------|---------|------|
-| 51 | 个人间接成本 | 误工损失 | 因病误工工作日×日均薪资（元） | 1.5% |
-| 52 | 个人间接成本 | 交通往返成本 | 就医/干预往返交通费用总和（元） | 1.0% |
-| 53 | 个人间接成本 | 陪护家属误工成本 | 家属陪护误工折算费用（元） | 1.5% |
-| 54 | 个人间接成本 | 养生时间机会成本 | 每日治未病干预投入时间折算经济成本（元） | 1.0% |
-| 55 | 社会公共成本 | 医保基金支出节约额 | 慢病医保年度支出减少额（元） | 2.0% |
-| 56 | 社会公共成本 | 住院人次节约费用 | 住院减少带来的医保预算结余（元） | 1.5% |
-| 57 | 社会公共成本 | 早死生产力损失改善 | 干预后慢病早死导致的社会生产力损失减少额度 | 1.5% |
-| 58 | 远期成本效益 | 5年并发症治疗费用减少 | 预测5年内慢病并发症治疗费用减少总额（元） | 2.0% |
-| 59 | 远期成本效益 | 急诊就诊频次下降节约 | 急诊次数减少带来的费用节约（元） | 2.0% |
+def _parse_json(text):
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    return json.loads(text)
 
-### 五、卫生经济学综合评价核心指标（总权重18%）
-| 序号 | 二级指标 | 三级指标 | 指标描述 | 权重 |
-|------|---------|---------|---------|------|
-| 60 | 成本-效果分析 | 单位慢病新发减少成本 | 每减少1例慢病新发所需投入成本（元/例） | 2.0% |
-| 61 | 成本-效果分析 | 单位证候积分下降成本 | 每下降1分中医证候积分所需成本（元/分） | 2.0% |
-| 62 | 成本-效果分析 | 住院人次减少单位成本 | 每减少1次住院所需投入成本（元/次） | 2.0% |
-| 63 | 成本-效用分析 | 增量成本效用比(ICUR) | 每多获得1个QALY所需增量成本（元/QALY） | 2.0% |
-| 64 | 成本-效用分析 | 成本效用比(CUR) | 总成本/总QALYs（元/QALY） | 2.0% |
-| 65 | 成本-效益分析 | 净效益(NB) | 干预节约总支出 - 治未病干预投入总成本（元） | 2.0% |
-| 66 | 成本-效益分析 | 效益成本比(BCR) | 总效益/总成本 | 2.0% |
-| 67 | 最小成本分析 | 同等产出成本差值 | 同等健康产出下中医方案与常规方案总成本差值 | 2.0% |
-| 68 | 预算影响分析 | 医保年度支出变化 | 区域人群普及治未病干预后医保年度总支出变化幅度 | 1.0% |
-| 69 | 预算影响分析 | 人均年度成本变化 | 干预后人均年度医疗费用变化（元） | 1.0% |
 
-### 六、安全性、满意度与资源消耗辅助指标（总权重7%）
-| 序号 | 二级指标 | 三级指标 | 指标描述 | 权重 |
-|------|---------|---------|---------|------|
-| 70 | 安全性评价 | 不良事件发生率 | 中医外治、中药调理轻度不适、严重不良反应人数占比 | 1.0% |
-| 71 | 安全性评价 | 不良事件严重程度分级 | 轻度/中度/重度/危及生命 | 1.0% |
-| 72 | 服务满意度评价 | 治未病服务总体满意度 | 非常不满意/不满意/一般/满意/非常满意 | 1.0% |
-| 73 | 服务满意度评价 | 各项服务满意度评分 | 体质调理、随访、功法指导、医师服务等分项评分(1-10分) | 1.0% |
-| 74 | 卫生资源消耗 | 人均年度门诊次数 | 干预期间人均门诊就诊次数 | 1.0% |
-| 75 | 卫生资源消耗 | 人均年度住院频次 | 干预期间人均住院次数 | 1.0% |
-| 76 | 卫生资源消耗 | 人均急诊就诊人次 | 干预期间人均急诊次数 | 1.0% |
+def build_dimension_prompt(criteria, dimension):
+    lines = [
+        criteria["system_role"],
+        "",
+        "## 评分规则",
+        criteria["scoring_rules"],
+        "",
+        f"## 当前评价维度：{dimension['name']}",
+        "请只对该维度下的指标评分，其他维度的指标忽略。",
+        "",
+        "| 序号 | 二级指标 | 三级指标 | 指标描述 | 权重 |",
+        "|------|---------|---------|---------|------|",
+    ]
+    for ind in dimension["indicators"]:
+        lines.append(
+            f"| {ind['seq']} | {ind['secondary']} | {ind['name']} | "
+            f"{ind['description']} | {ind['weight']}% |"
+        )
+    lines += [
+        "",
+        "## 输出格式",
+        "严格按以下JSON格式返回，不要有任何其他文字：",
+        '{"indicators": [{"seq": 1, "name": "年龄", "score": 85, "reason": "明确报告了入组年龄均值±标准差"}]}',
+        "",
+        "score 为 0-100 的整数，reason 为该指标得分的依据（引用文档内容）。",
+    ]
+    return "\n".join(lines)
+
+
+def score_dimension(content, criteria, dimension, client):
+    prompt = build_dimension_prompt(criteria, dimension)
+    response = client.chat.completions.create(
+        model=DEEPSEEK_MODEL,
+        messages=[
+            {"role": "system", "content": prompt},
+            {
+                "role": "user",
+                "content": f"请对以下研究文档中属于「{dimension['name']}」的指标进行评分：\n\n{content[:15000]}",
+            },
+        ],
+        temperature=0.1,
+        max_tokens=4096,
+    )
+    return _parse_json(response.choices[0].message.content)
+
+
+def generate_summary(content, dimensions, overall, client):
+    """生成整体总结，并做分数-证据一致性复核"""
+    summary_lines = []
+    for dim_name, dim_data in dimensions.items():
+        for ind in dim_data["indicators"]:
+            reason = str(ind.get("reason", ""))[:50]
+            summary_lines.append(
+                f"{ind.get('seq')}. {ind.get('name')}: {ind.get('score')}分 — {reason}"
+            )
+    score_table = "\n".join(summary_lines)
+
+    prompt = f"""你是一位中医治未病卫生经济学评价专家。以下是对一篇研究文档的分维度评分结果，总分 {overall} 分。
+
+## 评分结果总览
+{score_table}
+
+## 任务
+1. 复核各指标得分与其理由是否匹配，指出明显不一致的指标（如有）
+2. 用200字以内总结文档内容（document_summary）
+3. 用200字以内给出综合评价结论（overall_assessment）
+4. 给出3-5条改进建议（suggestions）
 
 ## 输出格式
-请严格按JSON格式返回，不要有任何其他文字：
-
-{
-  "document_summary": "对文档内容的简要总结（200字以内）",
-  "dimensions": {
-    "一、人群基线与中医体质基线指标（15%）": {
-      "total_weight": 15,
-      "indicators": [
-        {"seq": 1, "name": "年龄", "weight": 0.6, "score": 85, "reason": "明确报告了入组年龄均值±标准差"},
-        ...
-      ]
-    },
-    "二、治未病干预直接成本指标（20%）": {...},
-    "三、中西医临床产出与中医特色疗效指标（25%）": {...},
-    "四、间接疾病经济负担指标（15%）": {...},
-    "五、卫生经济学综合评价核心指标（18%）": {...},
-    "六、安全性、满意度与资源消耗辅助指标（7%）": {...}
-  },
-  "overall_score": 72.5,
-  "overall_assessment": "综合评分结论（200字以内）",
-  "suggestions": ["改进建议1", "改进建议2", "改进建议3"]
-}
+严格按JSON返回，不要有任何其他文字：
+{{"consistency_check": "分数-证据一致性复核结论（100字内，若无问题写'一致'）", "document_summary": "...", "overall_assessment": "...", "suggestions": ["..."]}}
 """
-
-
-def score_document(content):
-    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
 
     response = client.chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=[
-            {"role": "system", "content": EVALUATION_CRITERIA},
-            {
-                "role": "user",
-                "content": f"请对以下研究文档进行评分：\n\n{content[:30000]}",
-            },
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"文档内容（前8000字）：\n\n{content[:8000]}"},
         ],
         temperature=0.1,
-        max_tokens=8192,
+        max_tokens=2048,
     )
+    return _parse_json(response.choices[0].message.content)
 
-    result_text = response.choices[0].message.content.strip()
 
-    # Handle possible markdown code fence
-    if result_text.startswith("```"):
-        lines = result_text.split("\n")
-        result_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+def score_document(content, progress_callback=None):
+    criteria = load_criteria()
+    client = _get_client()
 
-    return json.loads(result_text)
+    dimensions = {}
+    for i, dim in enumerate(criteria["dimensions"]):
+        result = score_dimension(content, criteria, dim, client)
+        dimensions[dim["name"]] = {
+            "total_weight": dim["total_weight"],
+            "indicators": result.get("indicators", []),
+        }
+        if progress_callback:
+            progress_callback(i + 1, len(criteria["dimensions"]), dim["name"])
+
+    # 计算 overall_score = Σ(score × weight/100)
+    weight_map = {}
+    for dim in criteria["dimensions"]:
+        for ind in dim["indicators"]:
+            weight_map[ind["seq"]] = ind["weight"]
+
+    overall = 0.0
+    for dim_data in dimensions.values():
+        for ind in dim_data["indicators"]:
+            score = ind.get("score", 0)
+            weight = weight_map.get(ind.get("seq"), 0)
+            overall += score * weight / 100.0
+    overall = round(overall, 1)
+
+    # 生成总结 + 一致性校验
+    summary_result = generate_summary(content, dimensions, overall, client)
+
+    return {
+        "document_summary": summary_result.get("document_summary", ""),
+        "dimensions": dimensions,
+        "overall_score": overall,
+        "overall_assessment": summary_result.get("overall_assessment", ""),
+        "suggestions": summary_result.get("suggestions", []),
+        "consistency_check": summary_result.get("consistency_check", ""),
+    }
+
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return jsonify({"error": "未登录"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ── 异步评分任务状态 ────────────────────────────────────────────
+import threading
+import uuid
+
+_task_store: dict = {}
+_task_lock = threading.Lock()
+
+
+def _set_task(task_id, **kwargs):
+    with _task_lock:
+        _task_store[task_id] = kwargs
+
+
+def _process_upload(content, file_data, original_filename, ext, task_id):
+    """后台评分：分批评分 + 进度更新，结果存数据库。"""
+    def progress_cb(current, total, dim_name):
+        _set_task(task_id, status="processing", progress=current, total=total, dimension=dim_name)
+
+    try:
+        score_result = score_document(content, progress_callback=progress_cb)
+    except Exception as e:
+        _set_task(task_id, status="error", error=f"AI评分失败：{e}")
+        return
+
+    overall = score_result.get("overall_score", 0)
+    dim_scores = {}
+    for dim_name, dim_data in score_result.get("dimensions", {}).items():
+        ind_scores = {f"seq{i['seq']}": i["score"] for i in dim_data.get("indicators", [])}
+        dim_scores[dim_name] = {
+            "total_weight": dim_data.get("total_weight", 0),
+            "indicator_scores": ind_scores,
+        }
+
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            """INSERT INTO evaluations (original_filename, file_type, file_content, file_data,
+                                          score_json, total_score, dimension_scores, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                original_filename,
+                ext,
+                content,
+                file_data,
+                json.dumps(score_result, ensure_ascii=False),
+                overall,
+                json.dumps(dim_scores, ensure_ascii=False),
+                datetime.now().isoformat(),
+            ),
+        )
+        db.commit()
+        eval_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    _set_task(task_id, status="done", id=eval_id, total_score=overall, result=score_result)
+
+
+def _token_secret_key() -> bytes:
+    import hashlib
+    secret = os.environ.get("TCM_SECRET_KEY", "tcm-default-secret-key-2024")
+    return hashlib.sha256(secret.encode()).digest()
+
+
+def verify_token(token: str) -> str | None:
+    """验证主系统签发的 HMAC token，返回用户名或 None。"""
+    import hashlib
+    import hmac
+    import time
+    try:
+        payload_str, sig = token.rsplit(".", 1)
+        expected = hmac.new(_token_secret_key(), payload_str.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return None
+        payload = json.loads(payload_str)
+        if payload["exp"] < time.time():
+            return None
+        return payload["u"]
+    except Exception:
+        return None
+
+
+@app.route("/api/auth", methods=["GET"])
+def auth_status():
+    if session.get("logged_in"):
+        return jsonify({"logged_in": True, "username": session.get("username", "")})
+    token = request.args.get("token", "") or request.headers.get("X-Api-Token", "")
+    if token:
+        username = verify_token(token)
+        if username:
+            session["logged_in"] = True
+            session["username"] = username
+            return jsonify({"logged_in": True, "username": username})
+    return jsonify({"logged_in": False})
+
+
+@app.route("/api/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"success": True})
 
 
 @app.route("/")
@@ -266,6 +380,7 @@ def index():
 
 
 @app.route("/api/upload", methods=["POST"])
+@login_required
 def upload():
     if "file" not in request.files:
         return jsonify({"error": "请上传文件"}), 400
@@ -342,7 +457,65 @@ def upload():
     })
 
 
+@app.route("/api/upload/async", methods=["POST"])
+@login_required
+def upload_async():
+    if "file" not in request.files:
+        return jsonify({"error": "请上传文件"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "请选择文件"}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({"error": "仅支持 .docx 和 .pdf 格式"}), 400
+
+    original_filename = file.filename
+    ext = original_filename.rsplit(".", 1)[1].lower()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = secure_filename(original_filename)
+    if not safe_name or "." not in safe_name:
+        safe_name = f"upload_{timestamp}.{ext}"
+    saved_name = f"{timestamp}_{safe_name}"
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], saved_name)
+    file.save(filepath)
+
+    try:
+        content = extract_text(filepath, ext)
+        if not content.strip():
+            os.remove(filepath)
+            return jsonify({"error": "无法提取文档内容，请检查文件格式"}), 400
+    except Exception as e:
+        os.remove(filepath)
+        return jsonify({"error": f"文档解析失败：{str(e)}"}), 400
+
+    with open(filepath, "rb") as f:
+        file_data = f.read()
+
+    task_id = uuid.uuid4().hex[:12]
+    _set_task(task_id, status="processing", progress=0, total=6, dimension="准备中")
+
+    threading.Thread(
+        target=_process_upload,
+        args=(content, file_data, original_filename, ext, task_id),
+        daemon=True,
+    ).start()
+
+    return jsonify({"task_id": task_id})
+
+
+@app.route("/api/task/<task_id>", methods=["GET"])
+@login_required
+def task_status(task_id):
+    with _task_lock:
+        task = _task_store.get(task_id)
+    if task is None:
+        return jsonify({"status": "not_found"})
+    return jsonify(task)
+
+
 @app.route("/api/evaluations", methods=["GET"])
+@login_required
 def list_evaluations():
     db = get_db()
     rows = db.execute(
@@ -353,6 +526,7 @@ def list_evaluations():
 
 
 @app.route("/api/evaluations/<int:eval_id>", methods=["GET"])
+@login_required
 def get_evaluation(eval_id):
     db = get_db()
     row = db.execute(
@@ -371,6 +545,7 @@ def get_evaluation(eval_id):
 
 
 @app.route("/api/evaluations/<int:eval_id>/download", methods=["GET"])
+@login_required
 def download_file(eval_id):
     db = get_db()
     row = db.execute("SELECT file_data, original_filename FROM evaluations WHERE id = ?", (eval_id,)).fetchone()
@@ -390,6 +565,7 @@ def download_file(eval_id):
 
 
 @app.route("/api/evaluations/<int:eval_id>/report", methods=["GET"])
+@login_required
 def download_report(eval_id):
     db = get_db()
     row = db.execute(
@@ -410,7 +586,7 @@ def download_report(eval_id):
     doc.styles["Normal"].font.name = "SimSun"
     doc.styles["Normal"].font.size = docx.shared.Pt(11)
 
-    doc.add_heading("中医治未病卫生经济学综合评价报告", 0)
+    doc.add_heading("中医治未病卫生经济学评价报告", 0)
     doc.add_paragraph(f"文献名称：{row['original_filename']}")
     doc.add_paragraph(f"综合得分：{row['total_score']:.1f} / 100")
     doc.add_paragraph(f"评价时间：{row['created_at'] if 'created_at' in row.keys() else ''}")
@@ -459,6 +635,45 @@ def download_report(eval_id):
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}",
         },
     )
+
+
+@app.route("/api/evaluations/<int:eval_id>", methods=["DELETE"])
+@login_required
+def delete_evaluation(eval_id):
+    if session.get("username") != "root":
+        return jsonify({"error": "无权限删除"}), 403
+    db = get_db()
+    db.execute("DELETE FROM evaluations WHERE id = ?", (eval_id,))
+    db.commit()
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/config", methods=["GET"])
+@login_required
+def admin_config():
+    return jsonify({
+        "system": "中医治未病卫生经济学评价系统",
+        "criteria": load_criteria(),
+    })
+
+
+@app.route("/api/admin/config", methods=["POST"])
+@login_required
+def save_admin_config():
+    if session.get("username") != "root":
+        return jsonify({"error": "无权限修改"}), 403
+    data = request.get_json()
+    if not data or "criteria" not in data:
+        return jsonify({"error": "缺少 criteria 数据"}), 400
+    criteria = data["criteria"]
+    if not isinstance(criteria.get("dimensions"), list):
+        return jsonify({"error": "criteria.dimensions 必须是数组"}), 400
+    try:
+        with open(CRITERIA_FILE, "w", encoding="utf-8") as f:
+            json.dump(criteria, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return jsonify({"error": f"保存失败：{e}"}), 500
+    return jsonify({"success": True})
 
 
 if __name__ == "__main__":

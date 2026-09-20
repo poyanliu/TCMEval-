@@ -129,7 +129,7 @@ def render_login_page() -> None:
         🏆 优秀文献展馆
         </a>
         <a href="/ecoeval/" target="_blank" style="{nav_style}">
-        📊 卫生经济学综合评价 →
+        📊 中医治未病卫生经济学评价 →
         </a>
         """, unsafe_allow_html=True)
 

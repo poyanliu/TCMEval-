@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>中医治未病卫生经济学综合评价系统</title>
+<title>中医治未病卫生经济学评价系统</title>
 <style>
   :root {
     --primary: #1a6b4b;
@@ -127,6 +127,18 @@
 
   .hidden { display:none !important; }
 
+  /* 登录 */
+  .header { position: relative; }
+  .logout-btn { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.4); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .logout-btn:hover { background: rgba(255,255,255,.28); }
+  .login-wrap { max-width: 400px; margin: 8vh auto 0; background: var(--card); border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.1); padding: 40px 32px; text-align: center; }
+  .login-wrap h2 { color: var(--primary); margin-bottom: 24px; font-size: 20px; }
+  .login-wrap input { width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 14px; }
+  .login-wrap input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,107,75,.12); }
+  .login-wrap .login-btn { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .login-wrap .login-btn:hover { background: #14523a; }
+  .login-wrap .login-err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 18px; }
+
   @media (max-width:640px) {
     .dimension-grid { grid-template-columns: 1fr; }
     .header h1 { font-size:20px; }
@@ -137,11 +149,21 @@
 <body>
 
 <div class="header">
-  <h1>中医治未病卫生经济学综合评价</h1>
+  <h1>中医治未病卫生经济学评价</h1>
   <p>上传研究文档，AI 智能解析并基于指标体系自动评分</p>
+  <button id="logoutBtn" class="logout-btn hidden" onclick="logout()">登出</button>
 </div>
 
-<div class="container">
+<div id="loginView" class="login-wrap hidden">
+  <h2>🔐 请先登录</h2>
+  <p style="color:#666;font-size:14px;line-height:1.7;margin-bottom:20px;">
+    本系统与「中医药政策文献智能评价系统」共享登录状态。<br>
+    请先登录主系统，然后返回本页面。
+  </p>
+  <a href="/" class="login-btn" style="display:block;text-decoration:none;text-align:center;">前往主系统登录</a>
+</div>
+
+<div class="container" id="mainContent">
 
   <!-- Upload Zone -->
   <div id="uploadZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
@@ -155,7 +177,7 @@
   <div id="loadingArea" class="status hidden">
     <div class="card">
       <div class="spinner">
-        <span>AI 正在分析评分中</span>
+        <span id="loadingText">AI 正在分析评分中</span>
         <div class="dot"></div><div class="dot"></div><div class="dot"></div>
       </div>
     </div>
@@ -197,6 +219,41 @@
 </div>
 
 <script>
+// ── 登录（共享主系统登录态）─────────────────────────────────
+async function checkAuth() {
+  try {
+    const resp = await fetch('/ecoeval/api/auth');
+    const d = await resp.json();
+    if (d.logged_in) { showMain(d.username); return; }
+    // 未登录：尝试用主系统的 token 验证
+    const token = localStorage.getItem('tcm_token') || '';
+    if (token) {
+      const vResp = await fetch('/ecoeval/api/auth?token=' + encodeURIComponent(token));
+      const vd = await vResp.json();
+      if (vd.logged_in) { showMain(vd.username); return; }
+    }
+  } catch (e) {}
+  showNeedLogin();
+}
+
+function showNeedLogin() {
+  document.getElementById('loginView').classList.remove('hidden');
+  document.getElementById('mainContent').classList.add('hidden');
+  document.getElementById('logoutBtn').classList.add('hidden');
+}
+
+function showMain(username) {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('mainContent').classList.remove('hidden');
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  loadHistory();
+}
+
+async function logout() {
+  try { await fetch('/ecoeval/api/logout', { method: 'POST' }); } catch (e) {}
+  showNeedLogin();
+}
+
 // Drag & drop
 const zone = document.getElementById('uploadZone');
 zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -218,6 +275,7 @@ async function processFile(file) {
 
   document.getElementById('uploadZone').classList.add('hidden');
   document.getElementById('loadingArea').classList.remove('hidden');
+  document.getElementById('loadingText').textContent = 'AI 正在分析评分中';
   document.getElementById('errorArea').classList.add('hidden');
   document.getElementById('resultArea').classList.add('hidden');
 
@@ -225,15 +283,36 @@ async function processFile(file) {
   form.append('file', file);
 
   try {
-    const resp = await fetch('/ecoeval/api/upload', { method: 'POST', body: form });
-    const data = await resp.json();
+    // 1. 上传，立即拿到 task_id
+    const upResp = await fetch('/ecoeval/api/upload/async', { method: 'POST', body: form });
+    const upData = await upResp.json();
+    if (!upResp.ok) { showError(upData.error || '上传失败'); return; }
+    const taskId = upData.task_id;
 
-    if (!resp.ok) { showError(data.error || '上传失败'); return; }
-
-    renderResult(data);
-    document.getElementById('loadingArea').classList.add('hidden');
-    document.getElementById('resultArea').classList.remove('hidden');
-    loadHistory();
+    // 2. 轮询进度
+    while (true) {
+      await new Promise(r => setTimeout(r, 2000));
+      const tResp = await fetch('/ecoeval/api/task/' + taskId);
+      const task = await tResp.json();
+      if (task.status === 'done') {
+        document.getElementById('loadingArea').classList.add('hidden');
+        document.getElementById('resultArea').classList.remove('hidden');
+        renderResult({ id: task.id, total_score: task.total_score, result: task.result });
+        loadHistory();
+        break;
+      } else if (task.status === 'error') {
+        showError(task.error || '评价失败');
+        break;
+      } else if (task.status === 'not_found') {
+        showError('任务不存在，请重试');
+        break;
+      }
+      // processing：更新进度
+      if (task.progress && task.total) {
+        document.getElementById('loadingText').textContent =
+          `正在评价「${task.dimension}」（第 ${task.progress}/${task.total} 类）...`;
+      }
+    }
   } catch (err) {
     showError('请求失败：' + err.message);
   }
@@ -356,7 +435,7 @@ async function viewDetail(id) {
   }
 }
 
-loadHistory();
+checkAuth();
 </script>
 </body>
 </html>

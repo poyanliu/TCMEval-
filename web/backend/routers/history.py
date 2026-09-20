@@ -116,10 +116,17 @@ def download_history_report(
     "/{record_id}",
     responses={200: {"description": "删除成功"}, 404: {"model": ErrorResponse}},
     summary="删除历史记录",
-    description="根据记录 ID 删除一条评价历史。",
+    description="根据记录 ID 删除一条评价历史（仅 root 可删除）。",
 )
-def delete_history(record_id: str) -> dict:
-    """Delete a single evaluation record."""
+def delete_history(
+    record_id: str,
+    token: str = Query("", description="登录令牌，仅 root 可删除"),
+) -> dict:
+    """Delete a single evaluation record (root only)."""
+    from backend.routers.auth import verify_token
+    username = verify_token(token)
+    if username != "root":
+        raise HTTPException(status_code=403, detail="无权限删除")
     ok = delete_record(record_id)
     if not ok:
         raise HTTPException(

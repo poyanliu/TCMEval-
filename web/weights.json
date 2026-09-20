@@ -1,0 +1,155 @@
+{
+  "primary_indicators": [
+    {
+      "id": "一",
+      "name": "研究背景与问题界定",
+      "weight": 15,
+      "secondary": [
+        {
+          "id": "1.1",
+          "name": "背景描述",
+          "max_score": 8
+        },
+        {
+          "id": "1.2",
+          "name": "问题界定",
+          "max_score": 7
+        }
+      ]
+    },
+    {
+      "id": "二",
+      "name": "研究方法与数据",
+      "weight": 20,
+      "secondary": [
+        {
+          "id": "2.1",
+          "name": "方法论",
+          "max_score": 8
+        },
+        {
+          "id": "2.2",
+          "name": "数据来源",
+          "max_score": 6
+        },
+        {
+          "id": "2.3",
+          "name": "数据分析",
+          "max_score": 6
+        }
+      ]
+    },
+    {
+      "id": "三",
+      "name": "政策建议可行性",
+      "weight": 18,
+      "secondary": [
+        {
+          "id": "3.1",
+          "name": "可操作性",
+          "max_score": 6
+        },
+        {
+          "id": "3.2",
+          "name": "成本效益",
+          "max_score": 6
+        },
+        {
+          "id": "3.3",
+          "name": "风险评估",
+          "max_score": 6
+        }
+      ]
+    },
+    {
+      "id": "四",
+      "name": "逻辑结构与论证",
+      "weight": 12,
+      "secondary": [
+        {
+          "id": "4.1",
+          "name": "逻辑性",
+          "max_score": 7
+        },
+        {
+          "id": "4.2",
+          "name": "论证充分性",
+          "max_score": 5
+        }
+      ]
+    },
+    {
+      "id": "五",
+      "name": "创新性与前瞻性",
+      "weight": 10,
+      "secondary": [
+        {
+          "id": "5.1",
+          "name": "创新性",
+          "max_score": 6
+        },
+        {
+          "id": "5.2",
+          "name": "前瞻性",
+          "max_score": 4
+        }
+      ]
+    },
+    {
+      "id": "六",
+      "name": "语言表达与格式",
+      "weight": 10,
+      "secondary": [
+        {
+          "id": "6.1",
+          "name": "语言表达",
+          "max_score": 6
+        },
+        {
+          "id": "6.2",
+          "name": "格式规范",
+          "max_score": 4
+        }
+      ]
+    },
+    {
+      "id": "七",
+      "name": "实际应用价值",
+      "weight": 15,
+      "secondary": [
+        {
+          "id": "7.1",
+          "name": "政策影响",
+          "max_score": 9
+        },
+        {
+          "id": "7.2",
+          "name": "社会影响",
+          "max_score": 6
+        }
+      ]
+    }
+  ],
+  "additional_items": [
+    {
+      "id": "bonus_discipline",
+      "name": "学科适配性",
+      "max_score": 5
+    },
+    {
+      "id": "bonus_methodology",
+      "name": "方法学复杂度",
+      "max_score": 3
+    },
+    {
+      "id": "bonus_timeliness",
+      "name": "政策时效性",
+      "max_score": 2
+    },
+    {
+      "id": "bonus_charts",
+      "name": "图表质量",
+      "max_score": 5
+    }
+  ]
+}

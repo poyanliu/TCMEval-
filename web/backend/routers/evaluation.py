@@ -277,10 +277,20 @@ async def evaluate_batch(
     )
 
 
-# ── Background task queue for async batch evaluation ────────────
+# ── Background task queue for async evaluation ────────────
 import threading
 import uuid
 from pydantic import BaseModel as PydanticBaseModel
+
+# 内存任务状态表：task_id -> {"status": "processing"/"done"/"error", "result": ..., "error": ...}
+_task_store: dict[str, dict] = {}
+_task_lock = threading.Lock()
+
+
+def _set_task(task_id: str, **kwargs) -> None:
+    with _task_lock:
+        _task_store[task_id] = kwargs
+
 
 class AsyncBatchResponse(PydanticBaseModel):
     task_id: str
@@ -314,18 +324,33 @@ async def evaluate_batch_async(
         content = await f.read()
         file_data_list.append((content, f.filename or "unknown", hashlib.md5(content).hexdigest()))
 
-    def _process_one(content: bytes, filename: str, file_hash: str):
+    _set_task(task_id, status="processing", file_count=len(file_data_list))
+
+    results: list[dict] = []
+    results_lock = threading.Lock()
+
+    def _process_one(content: bytes, filename: str, file_hash: str) -> None:
         """Process a single file — runs in a thread."""
         cached = lookup_cached_result(file_hash)
         if cached:
             logger.info("Async batch cache hit: %s", filename)
+            with results_lock:
+                results.append({"filename": filename, "status": "success", "result": cached})
             return
 
-        name, text = parse_document(BytesIO(content), filename)
+        try:
+            name, text = parse_document(BytesIO(content), filename)
+        except Exception as exc:
+            with results_lock:
+                results.append({"filename": filename, "status": "error", "error": f"解析失败: {exc}"})
+            return
+
         if not text.strip():
+            with results_lock:
+                results.append({"filename": filename, "status": "error", "error": "文献内容为空或解析失败"})
             return
 
-        # Use async evaluator with parallel indicator calls (3 concurrent)
+        # Use async evaluator with parallel indicator calls
         import asyncio as _asyncio
         try:
             loop = _asyncio.new_event_loop()
@@ -333,7 +358,7 @@ async def evaluate_batch_async(
             response = loop.run_until_complete(
                 evaluate_document_async(
                     text=text, doc_name=name,
-                    max_concurrency=5,  # 5 parallel LLM calls → ~3x faster
+                    max_concurrency=5,
                 )
             )
             loop.close()
@@ -350,22 +375,104 @@ async def evaluate_batch_async(
             overall_comment=response.overall_comment,
             ip_address=client_ip, filename=filename, file_hash=file_hash,
         )
+        with results_lock:
+            results.append({"filename": filename, "status": "success", "result": response.model_dump()})
 
-    from concurrent.futures import ThreadPoolExecutor as _TPE
-    # Process all files in parallel, each with parallel indicators
-    executor = _TPE(max_workers=min(len(file_data_list), 3))
-    for content, filename, file_hash in file_data_list:
-        executor.submit(_process_one, content, filename, file_hash)
-    executor.shutdown(wait=False)  # fire-and-forget
+    def _run_all() -> None:
+        from concurrent.futures import ThreadPoolExecutor as _TPE
+        executor = _TPE(max_workers=min(len(file_data_list), 3))
+        for content, filename, file_hash in file_data_list:
+            executor.submit(_process_one, content, filename, file_hash)
+        executor.shutdown(wait=True)
+        success = sum(1 for r in results if r["status"] == "success")
+        error = len(results) - success
+        _set_task(task_id, status="done", result={
+            "total": len(file_data_list),
+            "success_count": success,
+            "error_count": error,
+            "results": results,
+        })
 
+    threading.Thread(target=_run_all, daemon=True).start()
     logger.info("Async batch task %s: %d files running in parallel", task_id, len(file_data_list))
 
     return AsyncBatchResponse(
         task_id=task_id,
         file_count=len(file_data_list),
         filenames=[fn for _, fn, _ in file_data_list],
-        message=f"已接收 {len(file_data_list)} 个文件，后台评价中。约 {len(file_data_list)*1.5}~{len(file_data_list)*3} 分钟后刷新页面查看结果",
+        message=f"已接收 {len(file_data_list)} 个文件，后台评价中",
     )
+
+
+@router.post(
+    "/upload/async",
+    summary="上传文献并后台评价（立即返回 task_id，不等待 LLM 完成）",
+    description="上传单个 PDF/DOCX 文件，立即返回 task_id，评价在后台线程执行，通过 /task/{task_id} 轮询结果。",
+)
+async def evaluate_upload_async(
+    request: Request,
+    file: Annotated[UploadFile, File(description="PDF 或 DOCX 文献文件")],
+    doc_name: Annotated[str, Form()] = "",
+) -> dict:
+    """Upload a single file and evaluate in background. Returns immediately."""
+    client_ip = request.client.host if request.client else "unknown"
+    filename = file.filename or "unknown"
+
+    if detect_format(filename) is None:
+        raise HTTPException(status_code=400, detail=f"不支持的文件格式 '{filename}'，仅支持 PDF 和 DOCX")
+
+    content = await file.read()
+    file_hash = hashlib.md5(content).hexdigest()
+
+    # 去重：命中缓存直接返回 done
+    cached = lookup_cached_result(file_hash)
+    if cached:
+        task_id = uuid.uuid4().hex[:12]
+        _set_task(task_id, status="done", result=cached)
+        return {"task_id": task_id, "cached": True}
+
+    task_id = uuid.uuid4().hex[:12]
+    _set_task(task_id, status="processing")
+
+    def _process() -> None:
+        try:
+            name, text = parse_document(BytesIO(content), filename)
+            if not text.strip():
+                _set_task(task_id, status="error", error="文献内容为空或解析失败")
+                return
+            response = evaluate_document(text=text, doc_name=doc_name or name)
+            save_to_history(
+                record_id=response.id, timestamp=response.timestamp,
+                doc_name=response.doc_name, base_score=response.base_score,
+                total_score=response.total_score, scale_factor=response.scale_factor,
+                excluded_indicators=response.excluded_indicators,
+                primary_results=response.primary_results,
+                additional_results=response.additional_results,
+                overall_comment=response.overall_comment,
+                ip_address=client_ip, filename=filename, file_hash=file_hash,
+            )
+            _set_task(task_id, status="done", result=response.model_dump())
+        except Exception as exc:
+            logger.exception("Async upload evaluation failed for %s", filename)
+            _set_task(task_id, status="error", error=f"评价失败: {exc}")
+
+    threading.Thread(target=_process, daemon=True).start()
+    logger.info("Async upload task %s started for %s", task_id, filename)
+    return {"task_id": task_id}
+
+
+@router.get(
+    "/task/{task_id}",
+    summary="查询后台评价任务状态",
+    description="根据 task_id 查询评价进度，status 为 processing/done/error。",
+)
+def get_task_status(task_id: str) -> dict:
+    """Return the status and (if done) result of an async evaluation task."""
+    with _task_lock:
+        task = _task_store.get(task_id)
+    if task is None:
+        return {"status": "not_found"}
+    return task
 
 
 @router.post(

@@ -128,7 +128,8 @@
   <div class="nav-links">
     <a id="navMain" class="active" onclick="switchView('main')">🏠 主界面</a>
     <a id="navGallery" onclick="switchView('gallery')">🏆 优秀文献展馆</a>
-    <a href="/ecoeval/" target="_blank">📊 卫生经济学综合评价 →</a>
+    <a href="/ecoeval/" target="_blank">📊 中医治未病卫生经济学评价 →</a>
+    <a id="navAdmin" onclick="switchView('admin')">⚙️ 后台管理</a>
     <span class="user-chip" id="userChip"></span>
     <a onclick="logout()">登出</a>
   </div>
@@ -146,7 +147,6 @@
     <input type="password" id="loginPass" placeholder="请输入密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="btn" onclick="doLogin()">登录 / Login</button>
     <div class="err" id="loginErr"></div>
-    <p class="hint">默认账号 root / ABC / DEF / HIJK，密码 123456</p>
   </div>
 
   <!-- 主界面视图 -->
@@ -207,6 +207,12 @@
     <div id="galleryBody"><p style="color:var(--muted)">加载中...</p></div>
   </div>
 
+  <!-- 后台管理视图 -->
+  <div id="adminView" class="hidden">
+    <h2 class="section-title">⚙️ 后台管理</h2>
+    <div id="adminBody"><p style="color:var(--muted)">加载中...</p></div>
+  </div>
+
 </div>
 
 <script>
@@ -220,10 +226,13 @@ let currentCharts = [];
 function switchView(view) {
   document.getElementById('navMain').classList.toggle('active', view === 'main');
   document.getElementById('navGallery').classList.toggle('active', view === 'gallery');
+  document.getElementById('navAdmin').classList.toggle('active', view === 'admin');
   document.getElementById('mainView').classList.toggle('hidden', view !== 'main');
   document.getElementById('galleryView').classList.toggle('hidden', view !== 'gallery');
+  document.getElementById('adminView').classList.toggle('hidden', view !== 'admin');
   if (view === 'main') { loadHistory(); }
   if (view === 'gallery') { loadGallery(); }
+  if (view === 'admin') { loadAdmin(); }
 }
 
 function showAuthedUI() {
@@ -231,7 +240,410 @@ function showAuthedUI() {
   document.getElementById('navbar').classList.remove('hidden');
   document.getElementById('userChip').textContent = username;
   document.getElementById('mainView').classList.remove('hidden');
+  // 后台管理入口仅 root 可见
+  document.getElementById('navAdmin').classList.toggle('hidden', username !== 'root');
   switchView('main');
+}
+
+// ── 后台管理 ──────────────────────────────────────────────────
+async function loadAdmin() {
+  const body = document.getElementById('adminBody');
+  body.innerHTML = '<p style="color:var(--muted)">加载中...</p>';
+  try {
+    const token = localStorage.getItem('tcm_token') || '';
+    // 先建立 EcoEval 登录态（用主系统 token）
+    if (token) {
+      try { await fetch('/ecoeval/api/auth?token=' + encodeURIComponent(token)); } catch (e) {}
+    }
+
+    const [mainResp, mainHistResp, ecoCfgResp, ecoHistResp] = await Promise.all([
+      fetch('/api/admin/config'),
+      fetch('/api/history?limit=100'),
+      fetch('/ecoeval/api/admin/config'),
+      fetch('/ecoeval/api/evaluations'),
+    ]);
+    const main = await mainResp.json();
+    const mainHist = await mainHistResp.json();
+    let ecoCfg = null, ecoHistory = [];
+    if (ecoCfgResp.ok) ecoCfg = await ecoCfgResp.json();
+    if (ecoHistResp.ok) ecoHistory = await ecoHistResp.json();
+
+    let html = '';
+
+    // ── 历史记录管理 ──
+    html += `<div class="card"><h3 style="color:var(--primary-dark);margin-bottom:12px">🗑️ 历史记录管理</h3>`;
+
+    html += `<h4 style="margin:12px 0 6px">📄 中医药政策文献智能评价系统</h4>`;
+    const mainItems = mainHist.items || [];
+    if (!mainItems.length) {
+      html += `<p style="color:var(--muted)">暂无记录</p>`;
+    } else {
+      html += `<table class="history-table"><thead><tr><th>文献名称</th><th>得分</th><th>时间</th><th>操作</th></tr></thead><tbody>`;
+      for (const h of mainItems) {
+        html += `<tr><td>${esc(h.doc_name)}</td><td>${(h.total_score||0).toFixed(1)}</td><td>${esc(h.timestamp||'')}</td><td><a onclick="deleteMainHistory('${h.id}')" style="color:var(--bad)">删除</a></td></tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+
+    html += `<h4 style="margin:14px 0 6px">📊 中医治未病卫生经济学评价系统</h4>`;
+    if (!ecoHistory.length) {
+      html += `<p style="color:var(--muted)">暂无记录或未登录</p>`;
+    } else {
+      html += `<table class="history-table"><thead><tr><th>文件名称</th><th>得分</th><th>时间</th><th>操作</th></tr></thead><tbody>`;
+      for (const r of ecoHistory) {
+        html += `<tr><td>${esc(r.original_filename)}</td><td>${(r.total_score||0).toFixed(1)}</td><td>${esc(r.created_at||'')}</td><td><a onclick="deleteEcoHistory(${r.id})" style="color:var(--bad)">删除</a></td></tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
+
+    // ── 自动配平开关（主系统与 EcoEval 通用）──
+    html += `<p style="margin:14px 0 4px;font-size:14px">
+      <label style="cursor:pointer"><input type="checkbox" id="autoBalance" checked> 自动配平（此消彼长）</label></p>`;
+
+    // ── 主系统权重编辑 ──
+    window._mainWeights = {
+      primary_indicators: JSON.parse(JSON.stringify(main.primary_indicators || [])),
+      additional_items: JSON.parse(JSON.stringify(main.additional_items || [])),
+    };
+    html += `<div class="card"><h3 style="color:var(--primary-dark);margin-bottom:12px">📄 中医药政策文献智能评价系统</h3>`;
+    html += `<p style="margin:14px 0 4px;font-size:14px">一级指标总权重：<span id="mainDimTotal" style="font-weight:700;color:var(--primary-dark)">100</span> / 100</p>`;
+    for (let pi = 0; pi < (main.primary_indicators || []).length; pi++) {
+      const p = main.primary_indicators[pi];
+      html += `<h4 style="margin:14px 0 6px">${esc(p.id)} ${esc(p.name)}（满分
+        <input type="number" step="1" min="0" max="100" value="${p.weight}" data-pi="${pi}"
+          class="main-dim-weight-input" onchange="rebalanceMainDims(${pi})"
+          style="width:60px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;"> 分）</h4>`;
+      html += `<table class="history-table"><thead><tr><th>编号</th><th>二级指标</th><th>满分</th></tr></thead><tbody>`;
+      for (let si = 0; si < (p.secondary || []).length; si++) {
+        const s = p.secondary[si];
+        html += `<tr><td>${esc(s.id)}</td><td>${esc(s.name)}</td>
+          <td><input type="number" step="1" min="0" max="100" value="${s.max_score}" data-pi="${pi}" data-si="${si}"
+            class="main-weight-input" onchange="rebalanceMainIndicators(${pi}, ${si})"
+            style="width:60px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;"></td></tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+    html += `<h4 style="margin:14px 0 6px">附加分项（满分，不参与百分制）</h4>`;
+    html += `<table class="history-table"><thead><tr><th>名称</th><th>满分</th></tr></thead><tbody>`;
+    for (const a of (main.additional_items || [])) {
+      html += `<tr><td>${esc(a.name)}</td><td>${a.max_score}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    html += `<div style="margin-top:16px"><button class="btn btn-primary" onclick="saveMainWeights()">💾 保存主系统权重</button> <span id="mainSaveMsg" style="margin-left:12px;font-size:13px;color:var(--good)"></span></div>`;
+    html += `<h4 style="margin:14px 0 6px">系统提示词</h4>`;
+    html += `<pre style="white-space:pre-wrap;background:#f8f9fa;padding:14px;border-radius:8px;font-size:12px;line-height:1.6;max-height:400px;overflow:auto">${esc(main.prompt || '')}</pre>`;
+    html += `</div>`;
+
+    if (ecoCfg && ecoCfg.criteria) {
+      const ecoCrit = ecoCfg.criteria;
+      window._ecoCriteria = ecoCrit;
+      html += `<div class="card"><h3 style="color:var(--primary-dark);margin-bottom:12px">📊 中医治未病卫生经济学评价系统</h3>`;
+      html += `<h4 style="margin:12px 0 6px">评分规则</h4>`;
+      html += `<pre style="white-space:pre-wrap;background:#f8f9fa;padding:14px;border-radius:8px;font-size:12px;line-height:1.6;max-height:300px;overflow:auto">${esc(ecoCrit.scoring_rules || '')}</pre>`;
+      html += `<p style="margin:14px 0 4px;font-size:14px">6 大类总权重：<span id="dimTotal" style="font-weight:700;color:var(--primary-dark)">100</span> / 100</p>`;
+      for (let di = 0; di < (ecoCrit.dimensions || []).length; di++) {
+        const dim = ecoCrit.dimensions[di];
+        html += `<h4 style="margin:14px 0 6px">${esc(dim.name)}（
+          <input type="number" step="0.5" min="0" max="100" value="${dim.total_weight}"
+            data-dim="${di}" class="dim-weight-input" onchange="rebalanceDims(${di})"
+            style="width:64px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;"> 分）</h4>`;
+        html += `<table class="history-table"><thead><tr><th>序号</th><th>二级指标</th><th>三级指标</th><th>权重(%)</th></tr></thead><tbody>`;
+        for (let ii = 0; ii < (dim.indicators || []).length; ii++) {
+          const ind = dim.indicators[ii];
+          html += `<tr><td>${ind.seq}</td><td>${esc(ind.secondary)}</td><td>${esc(ind.name)}</td>
+            <td><input type="number" step="0.1" min="0" max="100" value="${ind.weight}"
+              data-dim="${di}" data-seq="${ind.seq}" class="weight-input" onchange="rebalanceIndicators(${di}, ${ii})"
+              style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;"></td></tr>`;
+        }
+        html += `</tbody></table>`;
+      }
+      html += `<div style="margin-top:16px"><button class="btn btn-primary" onclick="saveEcoWeights()">💾 保存权重修改</button> <span id="saveMsg" style="margin-left:12px;font-size:13px;color:var(--good)"></span></div>`;
+      html += `</div>`;
+    } else {
+      html += `<div class="card"><p style="color:var(--muted)">⚠️ 无法加载 EcoEval 配置</p></div>`;
+    }
+
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<p style="color:var(--bad)">加载失败：' + e.message + '</p>';
+  }
+}
+
+function autoBalanceOn() {
+  const el = document.getElementById('autoBalance');
+  return el ? el.checked : false;
+}
+
+function scaleIndicatorWeights(dimIdx, ratio) {
+  const inputs = [...document.querySelectorAll('.weight-input')]
+    .filter(inp => parseInt(inp.dataset.dim) === dimIdx);
+  inputs.forEach(inp => {
+    const old = parseFloat(inp.value) || 0;
+    inp.value = Math.max(0, +(old * ratio).toFixed(2));
+  });
+}
+
+function rebalanceDims(changedIdx) {
+  const inputs = [...document.querySelectorAll('.dim-weight-input')];
+  const oldValues = inputs.map(inp => parseFloat(inp.value) || 0);
+  const sum = oldValues.reduce((a, b) => a + b, 0);
+  if (!autoBalanceOn()) { updateDimTotal(sum); return; }
+  const diff = 100 - sum;
+  if (Math.abs(diff) < 0.01) { updateDimTotal(sum); return; }
+  const others = inputs.filter((_, i) => i !== changedIdx);
+  const othersSum = others.reduce((a, inp) => a + (parseFloat(inp.value) || 0), 0);
+  if (othersSum <= 0) { alert('其他维度权重为 0，无法自动平衡，请手动调整'); updateDimTotal(sum); return; }
+  others.forEach(inp => {
+    const old = parseFloat(inp.value) || 0;
+    inp.value = Math.max(0, +(old + diff * old / othersSum).toFixed(1));
+  });
+  updateDimTotal(100);
+
+  // 实时配平各维度指标权重：按 新总权重/旧总权重 比例缩放
+  const newValues = inputs.map(inp => parseFloat(inp.value) || 0);
+  for (let di = 0; di < inputs.length; di++) {
+    if (oldValues[di] > 0 && Math.abs(newValues[di] - oldValues[di]) > 0.01) {
+      scaleIndicatorWeights(di, newValues[di] / oldValues[di]);
+    }
+  }
+}
+
+function rebalanceIndicators(dimIdx, changedIdx) {
+  if (!autoBalanceOn()) return;
+  const inputs = [...document.querySelectorAll('.weight-input')]
+    .filter(inp => parseInt(inp.dataset.dim) === dimIdx);
+  const values = inputs.map(inp => parseFloat(inp.value) || 0);
+  const sum = values.reduce((a, b) => a + b, 0);
+  const target = parseFloat(document.querySelectorAll('.dim-weight-input')[dimIdx].value) || 0;
+  const diff = target - sum;
+  if (Math.abs(diff) < 0.01) return;
+  const others = inputs.filter((_, i) => i !== changedIdx);
+  const othersSum = others.reduce((a, inp) => a + (parseFloat(inp.value) || 0), 0);
+  if (othersSum <= 0) return;
+  others.forEach(inp => {
+    const old = parseFloat(inp.value) || 0;
+    inp.value = Math.max(0, +(old + diff * old / othersSum).toFixed(1));
+  });
+}
+
+function updateDimTotal(val) {
+  const el = document.getElementById('dimTotal');
+  if (el) {
+    el.textContent = (+val.toFixed(1));
+    el.style.color = Math.abs(val - 100) < 0.01 ? 'var(--primary-dark)' : 'var(--bad)';
+  }
+}
+
+async function saveEcoWeights() {
+  if (!window._ecoCriteria) { alert('未加载配置'); return; }
+  const criteria = JSON.parse(JSON.stringify(window._ecoCriteria));
+
+  // 1. 读取维度总权重
+  const dimInputs = document.querySelectorAll('.dim-weight-input');
+  const dimTotals = [];
+  for (const inp of dimInputs) {
+    const di = parseInt(inp.dataset.dim);
+    const val = parseFloat(inp.value);
+    if (isNaN(val)) { alert('维度权重存在非法数值'); return; }
+    dimTotals[di] = val;
+    criteria.dimensions[di].total_weight = val;
+  }
+  const totalSum = dimTotals.reduce((a, b) => a + b, 0);
+  if (Math.abs(totalSum - 100) > 0.1) {
+    alert(`6 大类总权重为 ${totalSum.toFixed(1)}，应等于 100。请先调整使总和为 100 再保存。`);
+    return;
+  }
+
+  // 2. 读取指标权重
+  const inputs = document.querySelectorAll('.weight-input');
+  for (const inp of inputs) {
+    const di = parseInt(inp.dataset.dim);
+    const seq = parseInt(inp.dataset.seq);
+    const val = parseFloat(inp.value);
+    if (isNaN(val)) { alert('存在非法数值'); return; }
+    const ind = criteria.dimensions[di].indicators.find(x => x.seq === seq);
+    if (ind) { ind.weight = val; }
+  }
+
+  // 3. 自动配平开启：缩放指标权重使其和 = total_weight；关闭：仅提示不强制
+  if (autoBalanceOn()) {
+    for (const dim of criteria.dimensions) {
+      const indSum = dim.indicators.reduce((s, i) => s + (i.weight || 0), 0);
+      if (indSum > 0 && Math.abs(indSum - dim.total_weight) > 0.01) {
+        const ratio = dim.total_weight / indSum;
+        dim.indicators.forEach(i => { i.weight = Math.round(i.weight * ratio * 100) / 100; });
+      }
+    }
+  } else {
+    const mismatches = [];
+    for (const dim of criteria.dimensions) {
+      const indSum = dim.indicators.reduce((s, i) => s + (i.weight || 0), 0);
+      if (Math.abs(indSum - dim.total_weight) > 0.05) {
+        mismatches.push(`${dim.name}：指标和 ${indSum.toFixed(1)} vs 总权重 ${dim.total_weight}`);
+      }
+    }
+    if (mismatches.length) {
+      const ok = confirm(`以下维度指标权重之和与总权重不一致，是否仍保存？\n\n${mismatches.join('\n')}`);
+      if (!ok) return;
+    }
+  }
+
+  const msg = document.getElementById('saveMsg');
+  msg.textContent = '保存中...';
+  try {
+    const resp = await fetch('/ecoeval/api/admin/config', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ criteria }),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      msg.textContent = '✅ 已保存，下次评分生效';
+      window._ecoCriteria = criteria;
+    } else {
+      msg.textContent = '❌ ' + (data.error || '保存失败');
+    }
+  } catch (e) {
+    msg.textContent = '❌ ' + e.message;
+  }
+}
+
+// ── 主系统权重编辑 ────────────────────────────────────────────
+function scaleMainIndicators(pi, ratio) {
+  const inputs = [...document.querySelectorAll('.main-weight-input')]
+    .filter(inp => parseInt(inp.dataset.pi) === pi);
+  inputs.forEach(inp => {
+    const old = parseFloat(inp.value) || 0;
+    inp.value = Math.max(0, +(old * ratio).toFixed(1));
+  });
+}
+
+function rebalanceMainDims(changedIdx) {
+  const inputs = [...document.querySelectorAll('.main-dim-weight-input')];
+  const oldValues = inputs.map(inp => parseFloat(inp.value) || 0);
+  const sum = oldValues.reduce((a, b) => a + b, 0);
+  if (!autoBalanceOn()) { updateMainDimTotal(sum); return; }
+  const diff = 100 - sum;
+  if (Math.abs(diff) < 0.01) { updateMainDimTotal(sum); return; }
+  const others = inputs.filter((_, i) => i !== changedIdx);
+  const othersSum = others.reduce((a, inp) => a + (parseFloat(inp.value) || 0), 0);
+  if (othersSum <= 0) { alert('其他一级指标权重为 0，无法自动平衡'); updateMainDimTotal(sum); return; }
+  others.forEach(inp => {
+    const old = parseFloat(inp.value) || 0;
+    inp.value = Math.max(0, +(old + diff * old / othersSum).toFixed(1));
+  });
+  updateMainDimTotal(100);
+  // 实时缩放各一级指标的二级指标满分
+  const newValues = inputs.map(inp => parseFloat(inp.value) || 0);
+  for (let pi = 0; pi < inputs.length; pi++) {
+    if (oldValues[pi] > 0 && Math.abs(newValues[pi] - oldValues[pi]) > 0.01) {
+      scaleMainIndicators(pi, newValues[pi] / oldValues[pi]);
+    }
+  }
+}
+
+function rebalanceMainIndicators(pi, changedIdx) {
+  if (!autoBalanceOn()) return;
+  const inputs = [...document.querySelectorAll('.main-weight-input')]
+    .filter(inp => parseInt(inp.dataset.pi) === pi);
+  const values = inputs.map(inp => parseFloat(inp.value) || 0);
+  const sum = values.reduce((a, b) => a + b, 0);
+  const target = parseFloat(document.querySelectorAll('.main-dim-weight-input')[pi].value) || 0;
+  const diff = target - sum;
+  if (Math.abs(diff) < 0.01) return;
+  const others = inputs.filter((_, i) => i !== changedIdx);
+  const othersSum = others.reduce((a, inp) => a + (parseFloat(inp.value) || 0), 0);
+  if (othersSum <= 0) return;
+  others.forEach(inp => {
+    const old = parseFloat(inp.value) || 0;
+    inp.value = Math.max(0, +(old + diff * old / othersSum).toFixed(1));
+  });
+}
+
+function updateMainDimTotal(val) {
+  const el = document.getElementById('mainDimTotal');
+  if (el) {
+    el.textContent = (+val.toFixed(1));
+    el.style.color = Math.abs(val - 100) < 0.01 ? 'var(--primary-dark)' : 'var(--bad)';
+  }
+}
+
+async function saveMainWeights() {
+  if (!window._mainWeights) { alert('未加载配置'); return; }
+  const weights = JSON.parse(JSON.stringify(window._mainWeights));
+
+  // 1. 读取一级指标权重
+  const dimInputs = document.querySelectorAll('.main-dim-weight-input');
+  const dimTotals = [];
+  for (const inp of dimInputs) {
+    const pi = parseInt(inp.dataset.pi);
+    const val = parseFloat(inp.value);
+    if (isNaN(val)) { alert('一级指标权重存在非法数值'); return; }
+    dimTotals[pi] = val;
+    weights.primary_indicators[pi].weight = val;
+  }
+  const totalSum = dimTotals.reduce((a, b) => a + b, 0);
+  if (Math.abs(totalSum - 100) > 0.1) {
+    alert(`一级指标总权重为 ${totalSum.toFixed(1)}，应等于 100。请先调整使总和为 100 再保存。`);
+    return;
+  }
+
+  // 2. 读取二级指标满分
+  const inputs = document.querySelectorAll('.main-weight-input');
+  for (const inp of inputs) {
+    const pi = parseInt(inp.dataset.pi);
+    const si = parseInt(inp.dataset.si);
+    const val = parseFloat(inp.value);
+    if (isNaN(val)) { alert('二级指标满分存在非法数值'); return; }
+    weights.primary_indicators[pi].secondary[si].max_score = val;
+  }
+
+  // 3. 自动配平开启：缩放二级满分使和 = 一级权重
+  if (autoBalanceOn()) {
+    for (const p of weights.primary_indicators) {
+      const indSum = p.secondary.reduce((s, i) => s + (i.max_score || 0), 0);
+      if (indSum > 0 && Math.abs(indSum - p.weight) > 0.01) {
+        const ratio = p.weight / indSum;
+        p.secondary.forEach(i => { i.max_score = Math.round(i.max_score * ratio * 100) / 100; });
+      }
+    }
+  }
+
+  const msg = document.getElementById('mainSaveMsg');
+  msg.textContent = '保存中...';
+  try {
+    const token = localStorage.getItem('tcm_token') || '';
+    const resp = await fetch('/api/admin/config?token=' + encodeURIComponent(token), {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(weights),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      msg.textContent = '✅ 已保存，下次评分生效';
+      window._mainWeights = weights;
+    } else {
+      msg.textContent = '❌ ' + (data.detail || data.error || '保存失败');
+    }
+  } catch (e) {
+    msg.textContent = '❌ ' + e.message;
+  }
+}
+
+async function deleteMainHistory(id) {
+  if (!confirm('确定删除这条记录吗？')) return;
+  try {
+    const token = localStorage.getItem('tcm_token') || '';
+    const resp = await fetch('/api/history/' + id + '?token=' + encodeURIComponent(token), { method: 'DELETE' });
+    if (resp.ok) { loadAdmin(); } else { alert('删除失败'); }
+  } catch (e) { alert('删除失败：' + e.message); }
+}
+
+async function deleteEcoHistory(id) {
+  if (!confirm('确定删除这条记录吗？')) return;
+  try {
+    const resp = await fetch('/ecoeval/api/evaluations/' + id, { method: 'DELETE' });
+    if (resp.ok) { loadAdmin(); } else { alert('删除失败'); }
+  } catch (e) { alert('删除失败：' + e.message); }
 }
 
 function showLoginUI() {
@@ -302,7 +714,9 @@ function removeFile(i) { selectedFiles.splice(i, 1); renderFileList(); }
 function resetUpload() { selectedFiles = []; document.getElementById('fileInput').value=''; renderFileList(); hideError(); }
 
 // ── 评价 ──────────────────────────────────────────────────────
-function startEvaluation() {
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function startEvaluation() {
   if (selectedFiles.length === 0) return;
   clearCharts();
   document.getElementById('uploadZone').classList.add('hidden');
@@ -320,27 +734,55 @@ function startEvaluation() {
   if (isBatch) { selectedFiles.forEach(f => form.append('files', f)); }
   else { form.append('file', selectedFiles[0]); form.append('doc_name', selectedFiles[0].name); }
 
-  const endpoint = isBatch ? '/api/evaluate/batch' : '/api/evaluate/upload';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 900000); // 15min
+  const endpoint = isBatch ? '/api/evaluate/batch/async' : '/api/evaluate/upload/async';
 
-  fetch(endpoint, { method: 'POST', body: form, signal: controller.signal })
-    .then(resp => resp.json())
-    .then(data => {
-      clearTimeout(timeoutId);
-      document.getElementById('loadingBox').classList.add('hidden');
-      if (isBatch) { renderBatchResults(data); }
-      else { renderSingleResult(data); }
-      loadHistory();
-    })
-    .catch(err => {
-      clearTimeout(timeoutId);
+  try {
+    // 1. 上传，立即拿到 task_id
+    const upResp = await fetch(endpoint, { method: 'POST', body: form });
+    const upData = await upResp.json();
+    if (!upResp.ok) {
       document.getElementById('loadingBox').classList.add('hidden');
       document.getElementById('uploadZone').classList.remove('hidden');
       document.getElementById('actionRow').classList.remove('hidden');
-      if (err.name === 'AbortError') showError('处理超时（超过15分钟）。建议分批上传或减小文件');
-      else showError('请求失败：' + err.message);
-    });
+      showError(upData.detail || upData.message || '上传失败');
+      return;
+    }
+    const taskId = upData.task_id;
+
+    // 2. 轮询任务状态
+    while (true) {
+      await sleep(3000);
+      const tResp = await fetch('/api/evaluate/task/' + taskId);
+      const task = await tResp.json();
+      if (task.status === 'done') {
+        document.getElementById('loadingBox').classList.add('hidden');
+        document.getElementById('uploadZone').classList.remove('hidden');
+        document.getElementById('actionRow').classList.remove('hidden');
+        if (isBatch) { renderBatchResults(task.result); }
+        else { renderSingleResult(task.result); }
+        loadHistory();
+        break;
+      } else if (task.status === 'error') {
+        document.getElementById('loadingBox').classList.add('hidden');
+        document.getElementById('uploadZone').classList.remove('hidden');
+        document.getElementById('actionRow').classList.remove('hidden');
+        showError(task.error || '评价失败');
+        break;
+      } else if (task.status === 'not_found') {
+        document.getElementById('loadingBox').classList.add('hidden');
+        document.getElementById('uploadZone').classList.remove('hidden');
+        document.getElementById('actionRow').classList.remove('hidden');
+        showError('任务不存在或已过期，请重试');
+        break;
+      }
+      // status === 'processing' 继续轮询
+    }
+  } catch (err) {
+    document.getElementById('loadingBox').classList.add('hidden');
+    document.getElementById('uploadZone').classList.remove('hidden');
+    document.getElementById('actionRow').classList.remove('hidden');
+    showError('请求失败：' + err.message);
+  }
 }
 
 // ── 结果渲染 ──────────────────────────────────────────────────
@@ -491,7 +933,7 @@ function clearCharts() { currentCharts.forEach(c => { try { c.destroy(); } catch
 async function loadHistory() {
   const tbody = document.getElementById('historyBody');
   try {
-    const resp = await fetch('/api/history?username=' + encodeURIComponent(username) + '&limit=50');
+    const resp = await fetch('/api/history?limit=50');
     const data = await resp.json();
     const items = data.items || [];
     if (!items.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">暂无记录</td></tr>'; return; }
@@ -503,6 +945,15 @@ async function loadHistory() {
         <td><a onclick="viewHistoryDetail('${h.id}')">查看详情</a><a href="/api/history/${h.id}/report?fmt=docx">下载报告</a></td></tr>`;
     }).join('');
   } catch (e) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">加载失败</td></tr>'; }
+}
+
+async function deleteHistory(id) {
+  if (!confirm('确定删除这条历史记录吗？')) return;
+  try {
+    const resp = await fetch('/api/history/' + id, { method: 'DELETE' });
+    if (resp.ok) { loadHistory(); }
+    else { alert('删除失败'); }
+  } catch (e) { alert('删除失败：' + e.message); }
 }
 
 async function viewHistoryDetail(id) {

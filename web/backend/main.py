@@ -9,10 +9,11 @@ Or for development with hot reload:
 
 import sys
 import os
+import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 # Ensure project root is on the Python path
@@ -121,6 +122,76 @@ def health_check():
     return {
         "status": "healthy",
     }
+
+
+# ── Admin: expose evaluation config (prompt + indicators/weights) ──
+_WEIGHTS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "weights.json",
+)
+
+
+def _load_weights_config() -> dict:
+    """Return current weights config (weights.json if exists, else defaults)."""
+    from shared.constants import PRIMARY_INDICATORS, ADDITIONAL_ITEMS
+    if os.path.exists(_WEIGHTS_FILE):
+        try:
+            with open(_WEIGHTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "primary_indicators": [
+            {
+                "id": p["id"], "name": p["name"], "weight": p["weight"],
+                "secondary": [
+                    {"id": s["id"], "name": s["name"], "max_score": s["max_score"]}
+                    for s in p["secondary"]
+                ],
+            }
+            for p in PRIMARY_INDICATORS
+        ],
+        "additional_items": [
+            {"id": a["id"], "name": a["name"], "max_score": a["max_score"]}
+            for a in ADDITIONAL_ITEMS
+        ],
+    }
+
+
+@app.get("/api/admin/config", tags=["admin"])
+def admin_config():
+    """Return the system evaluation prompt and indicator weights."""
+    from backend.services.prompt_builder import _AGENT_SYSTEM_PROMPT
+    weights = _load_weights_config()
+    return {
+        "system": "中医药政策文献智能评价系统",
+        "prompt": _AGENT_SYSTEM_PROMPT,
+        "primary_indicators": weights.get("primary_indicators", []),
+        "additional_items": weights.get("additional_items", []),
+    }
+
+
+@app.post("/api/admin/config", tags=["admin"])
+def save_admin_config(
+    payload: dict,
+    token: str = Query("", description="登录令牌，仅 root 可修改"),
+):
+    """Save custom indicator weights to weights.json (root only)."""
+    from backend.routers.auth import verify_token
+    username = verify_token(token)
+    if username != "root":
+        raise HTTPException(status_code=403, detail="无权限修改")
+
+    if not payload or "primary_indicators" not in payload:
+        raise HTTPException(status_code=400, detail="缺少 primary_indicators 数据")
+
+    try:
+        with open(_WEIGHTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存失败：{e}")
+
+    return {"success": True}
 
 
 # ── Excel download ──────────────────────────────────────────────────

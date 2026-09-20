@@ -1,0 +1,575 @@
+{
+  "dimensions": [
+    {
+      "indicators": [
+        {
+          "description": "入组时实际年龄（岁）",
+          "name": "年龄",
+          "secondary": "通用人口学基线",
+          "seq": 1,
+          "weight": 0.7
+        },
+        {
+          "description": "男/女",
+          "name": "性别",
+          "secondary": "通用人口学基线",
+          "seq": 2,
+          "weight": 0.6
+        },
+        {
+          "description": "公职人员/企业职工/自由职业/退休/学生/其他",
+          "name": "职业",
+          "secondary": "通用人口学基线",
+          "seq": 3,
+          "weight": 0.6
+        },
+        {
+          "description": "未婚/已婚/离异/丧偶",
+          "name": "婚姻状况",
+          "secondary": "通用人口学基线",
+          "seq": 4,
+          "weight": 0.6
+        },
+        {
+          "description": "小学及以下/中学/中专/大专/本科及以上",
+          "name": "文化水平",
+          "secondary": "通用人口学基线",
+          "seq": 5,
+          "weight": 0.6
+        },
+        {
+          "description": "收入分层数据",
+          "name": "家庭年收入",
+          "secondary": "通用人口学基线",
+          "seq": 6,
+          "weight": 0.6
+        },
+        {
+          "description": "汉族/少数民族",
+          "name": "民族",
+          "secondary": "通用人口学基线",
+          "seq": 7,
+          "weight": 0.4
+        },
+        {
+          "description": "职工医保/居民医保/新农合/商业保险/无医保",
+          "name": "医保类型",
+          "secondary": "通用人口学基线",
+          "seq": 8,
+          "weight": 0.6
+        },
+        {
+          "description": "高血压/糖尿病/冠心病/脑梗/高血脂/其他",
+          "name": "既往慢病史",
+          "secondary": "通用人口学基线",
+          "seq": 9,
+          "weight": 0.7
+        },
+        {
+          "description": "cm",
+          "name": "身高",
+          "secondary": "通用人口学基线",
+          "seq": 10,
+          "weight": 0.4
+        },
+        {
+          "description": "kg",
+          "name": "体重",
+          "secondary": "通用人口学基线",
+          "seq": 11,
+          "weight": 0.4
+        },
+        {
+          "description": "体重(kg)/身高²(m²)",
+          "name": "BMI指数",
+          "secondary": "通用人口学基线",
+          "seq": 12,
+          "weight": 0.6
+        },
+        {
+          "description": "收缩压/舒张压（mmHg）",
+          "name": "血压",
+          "secondary": "通用人口学基线",
+          "seq": 13,
+          "weight": 0.7
+        },
+        {
+          "description": "mmol/L",
+          "name": "空腹血糖",
+          "secondary": "通用人口学基线",
+          "seq": 14,
+          "weight": 0.7
+        },
+        {
+          "description": "%",
+          "name": "糖化血红蛋白",
+          "secondary": "通用人口学基线",
+          "seq": 15,
+          "weight": 0.7
+        },
+        {
+          "description": "总胆固醇、低密度脂蛋白、高密度脂蛋白、甘油三酯",
+          "name": "血脂四项",
+          "secondary": "通用人口学基线",
+          "seq": 16,
+          "weight": 0.7
+        },
+        {
+          "description": "药品、检查、住院、诊疗等费用总和（元）",
+          "name": "入组前1年直接医疗总支出",
+          "secondary": "通用人口学基线",
+          "seq": 17,
+          "weight": 0.9
+        },
+        {
+          "description": "平和质/气虚质/阳虚质/阴虚质/痰湿质/湿热质/血瘀质/气郁质/特禀质",
+          "name": "中医九种体质判定",
+          "secondary": "中医特色体质基线",
+          "seq": 18,
+          "weight": 1.1
+        },
+        {
+          "description": "疲乏、失眠、畏寒、胸闷、腹胀、肢体困重等单项证候评分总和",
+          "name": "中医证候总积分",
+          "secondary": "中医特色体质基线",
+          "seq": 19,
+          "weight": 1.1
+        },
+        {
+          "description": "各单项证候具体评分",
+          "name": "单项中医证候积分",
+          "secondary": "中医特色体质基线",
+          "seq": 20,
+          "weight": 0.9
+        },
+        {
+          "description": "中医养生知识掌握程度问卷得分",
+          "name": "中医健康素养水平",
+          "secondary": "中医特色体质基线",
+          "seq": 21,
+          "weight": 0.7
+        },
+        {
+          "description": "完全不了解/了解较少/一般了解/比较了解/非常了解",
+          "name": "治未病认知程度",
+          "secondary": "中医特色体质基线",
+          "seq": 22,
+          "weight": 0.7
+        }
+      ],
+      "name": "一、人群基线与中医体质基线指标（总权重15%）",
+      "total_weight": 15
+    },
+    {
+      "indicators": [
+        {
+          "description": "总费用、医保报销、个人自付（元）",
+          "name": "中药膏方/汤药费",
+          "secondary": "中医综合调理干预成本",
+          "seq": 23,
+          "weight": 2.2
+        },
+        {
+          "description": "艾灸、拔罐、刮痧、穴位贴敷、推拿、针灸、耳穴压豆总费用",
+          "name": "中医外治服务费",
+          "secondary": "中医综合调理干预成本",
+          "seq": 24,
+          "weight": 2.2
+        },
+        {
+          "description": "八段锦、太极拳、五禽戏、导引等教学服务费",
+          "name": "中医养生功法指导费",
+          "secondary": "中医综合调理干预成本",
+          "seq": 25,
+          "weight": 1.8
+        },
+        {
+          "description": "体质辨识评估、建档费用",
+          "name": "中医体质辨识费",
+          "secondary": "中医综合调理干预成本",
+          "seq": 26,
+          "weight": 1.8
+        },
+        {
+          "description": "季度随访、体质复评、健康咨询服务费",
+          "name": "健康随访管理费",
+          "secondary": "中医综合调理干预成本",
+          "seq": 27,
+          "weight": 2
+        },
+        {
+          "description": "药食同源食材、药膳调理配套支出",
+          "name": "食疗养生指导费用",
+          "secondary": "中医综合调理干预成本",
+          "seq": 28,
+          "weight": 2
+        },
+        {
+          "description": "降压、降糖、调脂等慢病西药",
+          "name": "常规药品费用",
+          "secondary": "西医配套及其他成本",
+          "seq": 29,
+          "weight": 1.8
+        },
+        {
+          "description": "血压、血糖、血脂、影像学等年度筛查费用",
+          "name": "检查检验费用",
+          "secondary": "西医配套及其他成本",
+          "seq": 30,
+          "weight": 1.6
+        },
+        {
+          "description": "慢病急性发作住院、并发症住院",
+          "name": "住院诊疗费用",
+          "secondary": "西医配套及其他成本",
+          "seq": 31,
+          "weight": 1.8
+        },
+        {
+          "description": "中医干预相关不适、慢病急性加重急诊/住院费用",
+          "name": "不良事件处置费用",
+          "secondary": "西医配套及其他成本",
+          "seq": 32,
+          "weight": 1.4
+        },
+        {
+          "description": "门诊费、注射费、耗材费等",
+          "name": "其他直接成本",
+          "secondary": "西医配套及其他成本",
+          "seq": 33,
+          "weight": 1.4
+        }
+      ],
+      "name": "二、治未病干预直接成本指标（总权重20%）",
+      "total_weight": 20
+    },
+    {
+      "indicators": [
+        {
+          "description": "干预前后体重差值（kg）",
+          "name": "体重变化",
+          "secondary": "西医客观生理结局",
+          "seq": 34,
+          "weight": 0.8
+        },
+        {
+          "description": "干预前后BMI差值",
+          "name": "BMI变化",
+          "secondary": "西医客观生理结局",
+          "seq": 35,
+          "weight": 0.8
+        },
+        {
+          "description": "收缩压<140且舒张压<90人数及占比",
+          "name": "血压达标率",
+          "secondary": "西医客观生理结局",
+          "seq": 36,
+          "weight": 1.2
+        },
+        {
+          "description": "空腹血糖、糖化血红蛋白干预前后差值",
+          "name": "糖代谢指标变化",
+          "secondary": "西医客观生理结局",
+          "seq": 37,
+          "weight": 1.2
+        },
+        {
+          "description": "血脂四项达标人数及占比",
+          "name": "血脂达标率",
+          "secondary": "西医客观生理结局",
+          "seq": 38,
+          "weight": 1.2
+        },
+        {
+          "description": "高血压、糖尿病、血脂异常新发人数、相对风险降低率",
+          "name": "慢病新发病例情况",
+          "secondary": "西医客观生理结局",
+          "seq": 39,
+          "weight": 1.6
+        },
+        {
+          "description": "心肌梗死、脑卒中、严重并发症发生频次",
+          "name": "心脑血管不良事件",
+          "secondary": "西医客观生理结局",
+          "seq": 40,
+          "weight": 1.2
+        },
+        {
+          "description": "EQ-5D-5L量表测算质量调整生命年",
+          "name": "健康效用值(QALY)",
+          "secondary": "通用生命质量产出",
+          "seq": 41,
+          "weight": 1.6
+        },
+        {
+          "description": "生理功能、躯体疼痛、社会功能、精神健康维度得分",
+          "name": "SF-36生存质量总分",
+          "secondary": "通用生命质量产出",
+          "seq": 42,
+          "weight": 1.4
+        },
+        {
+          "description": "行动、自理、日常活动、疼痛不适、焦虑抑郁分级",
+          "name": "EQ-5D各维度受损水平",
+          "secondary": "通用生命质量产出",
+          "seq": 43,
+          "weight": 1
+        },
+        {
+          "description": "偏颇质转为平和质、偏颇质积分下降人群占比",
+          "name": "中医体质改善转归率",
+          "secondary": "中医特色治未病疗效产出",
+          "seq": 44,
+          "weight": 2.2
+        },
+        {
+          "description": "干预前后证候积分差值",
+          "name": "中医证候总积分下降值",
+          "secondary": "中医特色治未病疗效产出",
+          "seq": 45,
+          "weight": 2
+        },
+        {
+          "description": "失眠、乏力、畏寒、腹胀、肩颈酸痛等症状改善人数占比",
+          "name": "单项中医症状缓解率",
+          "secondary": "中医特色治未病疗效产出",
+          "seq": 46,
+          "weight": 1.8
+        },
+        {
+          "description": "慢病高危人群进展为确诊慢病比例下降幅度",
+          "name": "既病防变进展延缓率",
+          "secondary": "中医特色治未病疗效产出",
+          "seq": 47,
+          "weight": 2
+        },
+        {
+          "description": "慢病康复人群年度急性复发频次、复发下降比例",
+          "name": "瘥后防复复发率",
+          "secondary": "中医特色治未病疗效产出",
+          "seq": 48,
+          "weight": 1.8
+        },
+        {
+          "description": "规律坚持功法、食疗、外治干预人群占比",
+          "name": "中医养生依从性",
+          "secondary": "中医特色治未病疗效产出",
+          "seq": 49,
+          "weight": 1.6
+        },
+        {
+          "description": "未病先防/既病防变/瘥后防复匹配干预场景精准度",
+          "name": "治未病三级预防阶段适配度",
+          "secondary": "中医特色治未病疗效产出",
+          "seq": 50,
+          "weight": 1.6
+        }
+      ],
+      "name": "三、中西医临床产出与中医特色疗效指标（总权重25%）",
+      "total_weight": 25
+    },
+    {
+      "indicators": [
+        {
+          "description": "因病误工工作日×日均薪资（元）",
+          "name": "误工损失",
+          "secondary": "个人间接成本",
+          "seq": 51,
+          "weight": 1.5
+        },
+        {
+          "description": "就医/干预往返交通费用总和（元）",
+          "name": "交通往返成本",
+          "secondary": "个人间接成本",
+          "seq": 52,
+          "weight": 1.1
+        },
+        {
+          "description": "家属陪护误工折算费用（元）",
+          "name": "陪护家属误工成本",
+          "secondary": "个人间接成本",
+          "seq": 53,
+          "weight": 1.5
+        },
+        {
+          "description": "每日治未病干预投入时间折算经济成本（元）",
+          "name": "养生时间机会成本",
+          "secondary": "个人间接成本",
+          "seq": 54,
+          "weight": 1.1
+        },
+        {
+          "description": "慢病医保年度支出减少额（元）",
+          "name": "医保基金支出节约额",
+          "secondary": "社会公共成本",
+          "seq": 55,
+          "weight": 1.9
+        },
+        {
+          "description": "住院减少带来的医保预算结余（元）",
+          "name": "住院人次节约费用",
+          "secondary": "社会公共成本",
+          "seq": 56,
+          "weight": 1.5
+        },
+        {
+          "description": "干预后慢病早死导致的社会生产力损失减少额度",
+          "name": "早死生产力损失改善",
+          "secondary": "社会公共成本",
+          "seq": 57,
+          "weight": 1.5
+        },
+        {
+          "description": "预测5年内慢病并发症治疗费用减少总额（元）",
+          "name": "5年并发症治疗费用减少",
+          "secondary": "远期成本效益",
+          "seq": 58,
+          "weight": 3
+        },
+        {
+          "description": "急诊次数减少带来的费用节约（元）",
+          "name": "急诊就诊频次下降节约",
+          "secondary": "远期成本效益",
+          "seq": 59,
+          "weight": 1.9
+        }
+      ],
+      "name": "四、间接疾病经济负担指标（总权重15%）",
+      "total_weight": 15
+    },
+    {
+      "indicators": [
+        {
+          "description": "每减少1例慢病新发所需投入成本（元/例）",
+          "name": "单位慢病新发减少成本",
+          "secondary": "成本-效果分析",
+          "seq": 60,
+          "weight": 2
+        },
+        {
+          "description": "每下降1分中医证候积分所需成本（元/分）",
+          "name": "单位证候积分下降成本",
+          "secondary": "成本-效果分析",
+          "seq": 61,
+          "weight": 2
+        },
+        {
+          "description": "每减少1次住院所需投入成本（元/次）",
+          "name": "住院人次减少单位成本",
+          "secondary": "成本-效果分析",
+          "seq": 62,
+          "weight": 2
+        },
+        {
+          "description": "每多获得1个QALY所需增量成本（元/QALY）",
+          "name": "增量成本效用比(ICUR)",
+          "secondary": "成本-效用分析",
+          "seq": 63,
+          "weight": 2
+        },
+        {
+          "description": "总成本/总QALYs（元/QALY）",
+          "name": "成本效用比(CUR)",
+          "secondary": "成本-效用分析",
+          "seq": 64,
+          "weight": 2
+        },
+        {
+          "description": "干预节约总支出 - 治未病干预投入总成本（元）",
+          "name": "净效益(NB)",
+          "secondary": "成本-效益分析",
+          "seq": 65,
+          "weight": 2
+        },
+        {
+          "description": "总效益/总成本",
+          "name": "效益成本比(BCR)",
+          "secondary": "成本-效益分析",
+          "seq": 66,
+          "weight": 2
+        },
+        {
+          "description": "同等健康产出下中医方案与常规方案总成本差值",
+          "name": "同等产出成本差值",
+          "secondary": "最小成本分析",
+          "seq": 67,
+          "weight": 2
+        },
+        {
+          "description": "区域人群普及治未病干预后医保年度总支出变化幅度",
+          "name": "医保年度支出变化",
+          "secondary": "预算影响分析",
+          "seq": 68,
+          "weight": 1
+        },
+        {
+          "description": "干预后人均年度医疗费用变化（元）",
+          "name": "人均年度成本变化",
+          "secondary": "预算影响分析",
+          "seq": 69,
+          "weight": 1
+        }
+      ],
+      "name": "五、卫生经济学综合评价核心指标（总权重18%）",
+      "total_weight": 18
+    },
+    {
+      "indicators": [
+        {
+          "description": "中医外治、中药调理轻度不适、严重不良反应人数占比",
+          "name": "不良事件发生率",
+          "secondary": "安全性评价",
+          "seq": 70,
+          "weight": 1
+        },
+        {
+          "description": "轻度/中度/重度/危及生命",
+          "name": "不良事件严重程度分级",
+          "secondary": "安全性评价",
+          "seq": 71,
+          "weight": 1
+        },
+        {
+          "description": "非常不满意/不满意/一般/满意/非常满意",
+          "name": "治未病服务总体满意度",
+          "secondary": "服务满意度评价",
+          "seq": 72,
+          "weight": 1
+        },
+        {
+          "description": "体质调理、随访、功法指导、医师服务等分项评分(1-10分)",
+          "name": "各项服务满意度评分",
+          "secondary": "服务满意度评价",
+          "seq": 73,
+          "weight": 1
+        },
+        {
+          "description": "干预期间人均门诊就诊次数",
+          "name": "人均年度门诊次数",
+          "secondary": "卫生资源消耗",
+          "seq": 74,
+          "weight": 1
+        },
+        {
+          "description": "干预期间人均住院次数",
+          "name": "人均年度住院频次",
+          "secondary": "卫生资源消耗",
+          "seq": 75,
+          "weight": 1
+        },
+        {
+          "description": "干预期间人均急诊次数",
+          "name": "人均急诊就诊人次",
+          "secondary": "卫生资源消耗",
+          "seq": 76,
+          "weight": 1
+        }
+      ],
+      "name": "六、安全性、满意度与资源消耗辅助指标（总权重7%）",
+      "total_weight": 7
+    }
+  ],
+  "full_score": 100,
+  "scoring_rules": "- 每个三级指标满分100分，根据文档中是否包含该指标相关数据及详细程度打分：\n  - 0分：完全不涉及\n  - 1-30分：仅提及概念，无具体数据\n  - 31-60分：有部分数据但不完整\n  - 61-85分：数据较完整，稍有缺项\n  - 86-100分：数据完整，描述清晰\n- 每个指标得分 × 该指标权重系数（权重% / 100） = 加权得分\n- 总分 = 所有加权得分之和（满分100分）",
+  "system_role": "你是一位中医治未病卫生经济学评价专家。请根据以下评价指标体系，对用户上传的研究文档进行评分。"
+}
